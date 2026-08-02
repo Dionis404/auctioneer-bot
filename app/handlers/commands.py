@@ -160,6 +160,60 @@ async def cmd_backfill_results(
     await message.answer("\n".join(lines))
 
 
+@router.message(Command("next_auction"))
+async def cmd_next_auction(
+    message: Message,
+    bot: Bot,
+    db_pool: Pool,
+    config: Config,
+) -> None:
+    if not _is_admin(message, config):
+        return
+
+    if config.alert_chat_id is None:
+        await message.answer("ALERT_CHAT_ID не настроен.")
+        return
+
+    row = await db_pool.fetchrow(
+        """
+        SELECT item_name, item_type, supply, sfl_price, ingredients, start_at
+        FROM auctions
+        WHERE start_at > now()
+        ORDER BY start_at ASC
+        LIMIT 1
+        """
+    )
+    if row is None:
+        await message.answer("Нет запланированных аукционов.")
+        return
+
+    item_name = row["item_name"]
+    item_type = row["item_type"]
+
+    caption = (
+        "⏰ Ближайший аукцион: <b>{item_name}</b> ({item_type})\n"
+        "{bid}\n"
+        "Лотов: {supply}\n"
+        "Начало: {start_at}"
+    ).format(
+        item_name=item_name,
+        item_type=item_type,
+        bid=format_bid(row["sfl_price"], row["ingredients"]),
+        supply=row["supply"],
+        start_at=format_msk_time(row["start_at"]),
+    )
+
+    image_url = await get_item_image(db_pool, item_name, item_type)
+
+    try:
+        await send_with_image_preview(bot, config.alert_chat_id, caption, image_url)
+    except Exception:
+        logger.exception("next_auction: failed to send preview, falling back to text")
+        await bot.send_message(config.alert_chat_id, caption)
+
+    await message.answer("Информация о ближайшем аукционе отправлена.")
+
+
 @router.message(Command("test_notification"))
 async def cmd_test_notification(
     message: Message,

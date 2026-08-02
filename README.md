@@ -26,7 +26,7 @@ Sunflower Land: напоминание за час до старта, сообщ
 | `SFL_FARM_ID` | ID фермы, от имени которой опрашиваются результаты аукционов |
 | `ALERT_CHAT_ID` | Чат для технических алертов (например, истёкший `SFL_AUTH_TOKEN`) |
 | `NOTIFY_CHAT_ID` | Чат, куда шлются уведомления об аукционах (напоминания, старт, результаты) |
-| `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/update_auctions`, `/backfill_results`, `/test_notification` |
+| `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/update_auctions`, `/backfill_results`, `/next_auction`, `/test_notification` |
 | `SITE_IMAGE_BASE_URL` | База для картинок предметов, по умолчанию `https://goblincodex.fun/sprites/` |
 
 ## Локальный запуск
@@ -57,6 +57,7 @@ Sunflower Land: напоминание за час до старта, сообщ
 - `/status` — сводка по job'ам в шедулере (доступно админам).
 - `/update_auctions` — вручную обновить список аукционов и пересобрать расписание (админам).
 - `/backfill_results` — дозагрузить результаты для завершённых аукционов, у которых их ещё нет (админам).
+- `/next_auction` — отправить в `ALERT_CHAT_ID` информацию о ближайшем предстоящем аукционе (админам).
 - `/test_notification [reminder|started|results]` — отправить тестовое уведомление в `NOTIFY_CHAT_ID` для проверки формата (админам).
 
 ## Docker / Portainer
