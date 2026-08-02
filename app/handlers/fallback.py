@@ -36,16 +36,6 @@ async def cmd_unknown(message: Message, config: Config) -> None:
 
 @router.message()
 async def handle_plain_text(message: Message) -> None:
-    user_id = message.from_user.id if message.from_user else "unknown"
-    text = (message.text or message.caption or "")[:100]
-
-    logger.info(
-        "Received non-command message from user_id=%s in chat_id=%s: %s",
-        user_id,
-        message.chat.id,
-        text,
-    )
-
     if message.chat.type == "private":
         await message.answer(BOT_INFO_TEXT)
 
