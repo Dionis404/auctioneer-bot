@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -8,8 +9,23 @@ logger = logging.getLogger(__name__)
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+    await conn.set_type_codec(
+        "json",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+
+
 async def create_pool(database_url: str) -> asyncpg.Pool:
-    pool = await asyncpg.create_pool(dsn=database_url)
+    pool = await asyncpg.create_pool(dsn=database_url, init=_init_connection)
     logger.info("Database pool created")
     return pool
 

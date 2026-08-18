@@ -63,6 +63,26 @@ def test_format_top_and_last_no_data_message_when_empty():
     assert format_top_and_last([]) == "нет данных"
 
 
+def test_format_top_and_last_parses_double_encoded_json_string():
+    import json
+
+    leaderboard_str = json.dumps(
+        [{"rank": 1, "username": "Diana", "sfl": 100, "items": None}]
+    )
+
+    result = format_top_and_last(leaderboard_str)
+
+    assert result == "1. Diana — 100 Flower"
+
+
+def test_format_bid_parses_double_encoded_json_string():
+    import json
+
+    ingredients_str = json.dumps({"Gem": 1, "Wood": 0})
+
+    assert format_bid(0, ingredients_str) == "Ставка: Gem"
+
+
 class FakePool:
     def __init__(self, item_name):
         self._item_name = item_name

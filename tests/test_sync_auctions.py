@@ -1,4 +1,3 @@
-import json
 from unittest.mock import AsyncMock
 
 import pytest
@@ -116,15 +115,15 @@ async def test_sync_auctions_maps_nft_and_wearable_fields():
     assert nft_args[5] is None
     assert nft_args[8] == 1
     assert nft_args[9] == 12345
-    assert json.loads(nft_args[10]) == NFT_ITEM
+    assert nft_args[10] == NFT_ITEM
 
     wearable_args = auction_calls[1][1]
     assert wearable_args[0] == "auction-wearable-1"
     assert wearable_args[1] == "Goblin Mask"
     assert wearable_args[2] == "wearable"
-    assert json.loads(wearable_args[5]) == {"Wood": 10, "Stone": 5}
+    assert wearable_args[5] == {"Wood": 10, "Stone": 5}
     assert wearable_args[9] is None
-    assert json.loads(wearable_args[10]) == WEARABLE_ITEM
+    assert wearable_args[10] == WEARABLE_ITEM
 
     supply_calls = [c for c in conn.executed if "item_total_supply" in c[0]]
     assert len(supply_calls) == 2
@@ -193,7 +192,7 @@ async def test_sync_results_upserts_and_marks_fetched():
     assert args[1] == "winner"
     assert args[2] == 42
     assert args[3] == 50
-    assert json.loads(args[4]) == [{"farmId": "farm-1", "rank": 1}]
+    assert args[4] == [{"farmId": "farm-1", "rank": 1}]
 
     update_calls = [c for c in conn.executed if "UPDATE auctions" in c[0]]
     assert len(update_calls) == 1

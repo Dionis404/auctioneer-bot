@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from datetime import datetime
@@ -39,7 +40,18 @@ def format_msk_time(dt: datetime) -> str:
     return dt.astimezone(MSK_TZ).strftime("%d.%m %H:%M МСК")
 
 
+def _coerce_jsonb(value):
+    """Legacy rows may hold a double-encoded JSON string; parse it back into a dict/list."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return None
+    return value
+
+
 def format_bid(sfl_price, ingredients) -> str:
+    ingredients = _coerce_jsonb(ingredients)
     if sfl_price:
         return "Ставка: Flower"
     if ingredients:
@@ -61,6 +73,8 @@ def _entry_bid(entry: dict) -> str:
 
 
 def format_top_and_last(leaderboard: list[dict]) -> str:
+    leaderboard = _coerce_jsonb(leaderboard)
+
     entries = sorted(
         (entry for entry in (leaderboard or []) if entry.get("rank") is not None),
         key=lambda entry: entry["rank"],
@@ -109,7 +123,7 @@ async def send_reminder(bot: Bot, pool: Pool, auction_id: str) -> None:
     await pool.execute(
         """
         INSERT INTO auction_notifications (auction_id, kind, chat_id, message_id, delete_at)
-        VALUES ($1, 'reminder_1h', $2, $3, $4 - interval '45 minutes')
+        VALUES ($1, 'reminder_1h', $2, $3, $4::timestamptz - interval '45 minutes')
         """,
         auction_id,
         notify_chat_id,

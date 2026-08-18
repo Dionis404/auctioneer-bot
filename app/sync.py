@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timezone
 
@@ -64,14 +63,12 @@ async def sync_auctions(pool: asyncpg.Pool, auth_token: str | None = None) -> in
                     item.get("type"),
                     item.get("supply"),
                     item.get("sfl"),
-                    json.dumps(item.get("ingredients"))
-                    if item.get("ingredients") is not None
-                    else None,
+                    item.get("ingredients"),
                     _ms_to_dt(item.get("startAt")),
                     _ms_to_dt(item.get("endAt")),
                     item.get("chapterLimit"),
                     item.get("startId"),
-                    json.dumps(item),
+                    item,
                 )
                 affected += int(result.split()[-1])
 
@@ -116,9 +113,7 @@ async def sync_results(pool: asyncpg.Pool, auction_id: str, farm_id: str, auth_t
                 result.get("status"),
                 result.get("participantCount"),
                 result.get("supply"),
-                json.dumps(result.get("leaderboard"))
-                if result.get("leaderboard") is not None
-                else None,
+                result.get("leaderboard"),
             )
 
             await conn.execute(
