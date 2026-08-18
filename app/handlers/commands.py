@@ -121,8 +121,15 @@ async def cmd_backfill_results(
 
     rows = await db_pool.fetch(
         """
-        SELECT auction_id FROM auctions
-        WHERE end_at < now() AND results_fetched = false
+        SELECT a.auction_id
+        FROM auctions a
+        LEFT JOIN auction_results r ON r.auction_id = a.auction_id
+        WHERE a.end_at < now()
+          AND (
+              a.results_fetched = false
+              OR r.participant_count IS NULL
+              OR r.leaderboard IS NULL
+          )
         """
     )
 

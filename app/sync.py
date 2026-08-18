@@ -93,6 +93,13 @@ async def sync_results(pool: asyncpg.Pool, auction_id: str, farm_id: str, auth_t
     if result is None:
         return False
 
+    if result.get("participantCount") is None or result.get("leaderboard") is None:
+        logger.debug(
+            "sync_results: got 200 but results not ready yet: auction_id=%s",
+            auction_id,
+        )
+        return False
+
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(

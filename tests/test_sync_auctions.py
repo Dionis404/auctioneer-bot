@@ -212,3 +212,29 @@ async def test_sync_results_returns_false_when_not_ready():
 
     assert ok is False
     assert conn.executed == []
+
+
+@respx.mock
+async def test_sync_results_returns_false_when_200_but_not_computed_yet():
+    respx.get(
+        "https://api.sunflower-land.com/auction/auction-1/results/farm-1"
+    ).mock(
+        return_value=Response(
+            200,
+            json={
+                "status": None,
+                "participantCount": None,
+                "supply": 50,
+                "leaderboard": None,
+                "endAt": 1_700_000_000_000,
+            },
+        )
+    )
+
+    conn = FakeConnection()
+    pool = FakePool(conn)
+
+    ok = await sync.sync_results(pool, "auction-1", "farm-1", auth_token="token")
+
+    assert ok is False
+    assert conn.executed == []
