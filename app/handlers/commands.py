@@ -213,7 +213,9 @@ async def cmd_next_auction(
     image_url = await get_item_image(db_pool, item_name, item_type)
 
     try:
-        await send_with_image_preview(bot, config.alert_chat_id, caption, image_url)
+        await send_with_image_preview(
+            bot, config.alert_chat_id, caption, image_url, item_name
+        )
     except Exception:
         logger.exception("next_auction: failed to send preview, falling back to text")
         await bot.send_message(config.alert_chat_id, caption)
@@ -292,7 +294,9 @@ async def cmd_test_notification(
         )
 
     try:
-        await send_with_image_preview(bot, config.notify_chat_id, caption, image_url)
+        await send_with_image_preview(
+            bot, config.notify_chat_id, caption, image_url, item_name
+        )
     except Exception:
         logger.exception("test_notification: failed to send preview, falling back to text")
         await bot.send_message(config.notify_chat_id, caption)

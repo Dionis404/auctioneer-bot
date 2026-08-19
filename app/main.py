@@ -10,6 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.config import load_config
 from app.db import create_pool, run_migrations
 from app.handlers import commands, fallback
+from app.image_compose import close_client as close_image_client
 from app.jobs.auctions import refresh_auctions_job
 from app.sfl_client import close_client, init_client
 
@@ -62,6 +63,7 @@ async def main() -> None:
     finally:
         scheduler.shutdown(wait=False)
         await close_client()
+        await close_image_client()
         await pool.close()
         await bot.session.close()
 

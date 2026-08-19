@@ -1,7 +1,23 @@
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.config import Config
 from app.handlers.commands import cmd_test_notification
+
+
+@pytest.fixture(autouse=True)
+def _mock_background_compose(monkeypatch):
+    calls = []
+
+    async def fake_render(image_url, background_key):
+        calls.append((image_url, background_key))
+        return b"fake-png-bytes"
+
+    monkeypatch.setattr(
+        "app.jobs.notifications.render_item_on_background", fake_render
+    )
+    return calls
 
 
 def _make_config(**overrides) -> Config:
@@ -77,7 +93,7 @@ async def test_no_auctions_in_db():
     message.answer.assert_awaited_once()
 
 
-async def test_reminder_sends_photo_with_item_name():
+async def test_reminder_sends_photo_with_item_name(_mock_background_compose):
     message = _make_message()
     command = MagicMock(args="reminder")
     bot = AsyncMock()
@@ -91,13 +107,18 @@ async def test_reminder_sends_photo_with_item_name():
 
     bot.send_photo.assert_awaited_once()
     _, kwargs = bot.send_photo.await_args
-    assert kwargs["photo"] == "https://goblincodex.fun/sprites/sfts/genie_lamp.webp"
     assert kwargs["show_caption_above_media"] is True
     assert "Genie Lamp" in kwargs["caption"]
     message.answer.assert_awaited_once()
 
+    assert _mock_background_compose == [
+        ("https://goblincodex.fun/sprites/sfts/genie_lamp.webp", "Genie Lamp")
+    ]
 
-async def test_reminder_falls_back_to_default_image_when_sprite_missing():
+
+async def test_reminder_falls_back_to_default_image_when_sprite_missing(
+    _mock_background_compose,
+):
     message = _make_message()
     command = MagicMock(args="reminder")
     bot = AsyncMock()
@@ -106,8 +127,9 @@ async def test_reminder_falls_back_to_default_image_when_sprite_missing():
 
     await cmd_test_notification(message, command, bot, pool, config)
 
-    _, kwargs = bot.send_photo.await_args
-    assert kwargs["photo"] == "https://goblincodex.fun/sprites/sfts/alba.webp"
+    assert _mock_background_compose == [
+        ("https://goblincodex.fun/sprites/sfts/alba.webp", "Genie Lamp")
+    ]
 
 
 async def test_results_includes_leaderboard():

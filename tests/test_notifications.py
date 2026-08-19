@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
+import pytest
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import BufferedInputFile
 
 from app.jobs.notifications import (
     delete_notification,
@@ -13,6 +15,16 @@ from app.jobs.notifications import (
     send_results_notification,
     send_started,
 )
+
+
+@pytest.fixture(autouse=True)
+def _mock_background_compose(monkeypatch):
+    async def fake_render(image_url, background_key):
+        return b"fake-png-bytes"
+
+    monkeypatch.setattr(
+        "app.jobs.notifications.render_item_on_background", fake_render
+    )
 
 
 def test_format_msk_time_converts_utc_to_moscow():
@@ -169,7 +181,7 @@ async def test_send_reminder_zero_price_uses_ingredients(monkeypatch):
     bot.send_photo.assert_awaited_once()
     _, kwargs = bot.send_photo.await_args
     assert kwargs["show_caption_above_media"] is True
-    assert kwargs["photo"]  # falls back to default image
+    assert isinstance(kwargs["photo"], BufferedInputFile)
     text = kwargs["caption"]
     assert "Goblin Mask" in text
     assert "Ставка: Gem" in text

@@ -6,9 +6,10 @@ from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message
+from aiogram.types import BufferedInputFile, Message
 from asyncpg import Pool
 
+from app.image_compose import render_item_on_background
 from app.images import get_item_image
 
 logger = logging.getLogger(__name__)
@@ -18,17 +19,28 @@ MSK_TZ = ZoneInfo("Europe/Moscow")
 CAPTION_LIMIT = 1024
 
 
-async def send_with_image_preview(bot: Bot, chat_id: int, text: str, image_url: str) -> Message:
+async def send_with_image_preview(
+    bot: Bot, chat_id: int, text: str, image_url: str, background_key: str
+) -> Message:
+    photo: str | BufferedInputFile = image_url
+    try:
+        composed = await render_item_on_background(image_url, background_key)
+        photo = BufferedInputFile(composed, filename="auction.png")
+    except Exception:
+        logger.exception(
+            "send_with_image_preview: failed to compose background, falling back to raw sprite URL"
+        )
+
     if len(text) <= CAPTION_LIMIT:
         return await bot.send_photo(
             chat_id,
-            photo=image_url,
+            photo=photo,
             caption=text,
             show_caption_above_media=True,
         )
 
     await bot.send_message(chat_id, text)
-    return await bot.send_photo(chat_id, photo=image_url)
+    return await bot.send_photo(chat_id, photo=photo)
 
 
 def _notify_chat_id() -> int | None:
@@ -118,7 +130,7 @@ async def send_reminder(bot: Bot, pool: Pool, auction_id: str) -> None:
     )
 
     image_url = await get_item_image(pool, item_name, item_type)
-    message = await send_with_image_preview(bot, notify_chat_id, text, image_url)
+    message = await send_with_image_preview(bot, notify_chat_id, text, image_url, auction_id)
 
     await pool.execute(
         """
@@ -155,7 +167,7 @@ async def send_started(bot: Bot, pool: Pool, auction_id: str) -> None:
     text = f"🔨 Аукцион стартовал: <b>{item_name}</b>!\nУспей сделать ставку."
 
     image_url = await get_item_image(pool, item_name, item_type)
-    message = await send_with_image_preview(bot, notify_chat_id, text, image_url)
+    message = await send_with_image_preview(bot, notify_chat_id, text, image_url, auction_id)
 
     await pool.execute(
         """
@@ -201,7 +213,7 @@ async def send_results_notification(bot: Bot, pool: Pool, auction_id: str) -> No
     )
 
     image_url = await get_item_image(pool, item_name, item_type)
-    message = await send_with_image_preview(bot, notify_chat_id, text, image_url)
+    message = await send_with_image_preview(bot, notify_chat_id, text, image_url, auction_id)
 
     await pool.execute(
         """
