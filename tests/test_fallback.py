@@ -20,8 +20,6 @@ def _make_config(**overrides) -> Config:
     base = dict(
         telegram_bot_token="t",
         database_url="postgresql://x",
-        sfl_auth_token="token",
-        sfl_farm_id="farm-1",
         alert_chat_id=1,
         notify_chat_id=999,
         admin_ids=[42],
@@ -94,7 +92,7 @@ async def test_unknown_command_admin_gets_full_list():
 
     assert "Не знаю такую команду" in captured["text"]
     assert "/status" in captured["text"]
-    assert "/update_auctions" in captured["text"]
+    assert "/next_auction" in captured["text"]
     assert "/test_notification" in captured["text"]
 
 

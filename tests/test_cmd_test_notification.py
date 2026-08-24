@@ -24,8 +24,6 @@ def _make_config(**overrides) -> Config:
     base = dict(
         telegram_bot_token="t",
         database_url="postgresql://x",
-        sfl_auth_token="token",
-        sfl_farm_id="farm-1",
         alert_chat_id=1,
         notify_chat_id=999,
         admin_ids=[42],
@@ -77,7 +75,7 @@ async def test_unknown_type_lists_options():
     bot.send_photo.assert_not_called()
     message.answer.assert_awaited_once()
     text = message.answer.await_args.args[0]
-    assert "reminder" in text and "started" in text and "results" in text
+    assert "reminder" in text and "started" in text
 
 
 async def test_no_auctions_in_db():
@@ -130,20 +128,6 @@ async def test_reminder_falls_back_to_default_image_when_sprite_missing(
     assert _mock_background_compose == [
         ("https://goblincodex.fun/sprites/sfts/alba.webp", "Genie Lamp")
     ]
-
-
-async def test_results_includes_leaderboard():
-    message = _make_message()
-    command = MagicMock(args="results")
-    bot = AsyncMock()
-    pool = FakePool({"item_name": "Goblin Mask", "item_type": "wearable"})
-    config = _make_config()
-
-    await cmd_test_notification(message, command, bot, pool, config)
-
-    text = bot.send_photo.await_args.kwargs["caption"]
-    assert "test_user_1" in text
-    assert "Статус" not in text
 
 
 async def test_missing_notify_chat_id():

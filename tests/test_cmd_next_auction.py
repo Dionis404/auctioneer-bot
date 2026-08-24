@@ -1,16 +1,26 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.config import Config
 from app.handlers.commands import cmd_next_auction
+
+
+@pytest.fixture(autouse=True)
+def _mock_background_compose(monkeypatch):
+    async def fake_render(image_url, background_key):
+        return b"fake-png-bytes"
+
+    monkeypatch.setattr(
+        "app.jobs.notifications.render_item_on_background", fake_render
+    )
 
 
 def _make_config(**overrides) -> Config:
     base = dict(
         telegram_bot_token="t",
         database_url="postgresql://x",
-        sfl_auth_token="token",
-        sfl_farm_id="farm-1",
         alert_chat_id=1,
         notify_chat_id=999,
         admin_ids=[42],
@@ -92,7 +102,6 @@ async def test_sends_next_auction_to_alert_chat():
 
     bot.send_photo.assert_awaited_once()
     _, kwargs = bot.send_photo.await_args
-    assert kwargs["photo"] == "https://goblincodex.fun/sprites/sfts/genie_lamp.webp"
     assert kwargs["show_caption_above_media"] is True
 
     call_args, call_kwargs = bot.send_photo.await_args

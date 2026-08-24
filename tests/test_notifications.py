@@ -9,10 +9,7 @@ from app.jobs.notifications import (
     delete_notification,
     format_bid,
     format_msk_time,
-    format_top_and_last,
-    send_auction_ended_fallback,
     send_reminder,
-    send_results_notification,
     send_started,
 )
 
@@ -47,93 +44,12 @@ def test_format_bid_dash_when_no_price_or_ingredients():
     assert format_bid(0, None) == "Ставка: —"
 
 
-def test_format_top_and_last_shows_all_entries_sorted_by_rank():
-    leaderboard = [
-        {"rank": 50, "username": "Dozach007", "sfl": 0, "items": {"Salt Rock": 6108}},
-        {"rank": 1, "username": "Diana", "sfl": 0, "items": {"Salt Rock": 9597}},
-        {"rank": 2, "username": "Zolkan", "sfl": 0, "items": {"Salt Rock": 9185}},
-        {"rank": 3, "username": "Bolt", "sfl": 0, "items": {"Salt Rock": 8600}},
-    ]
-
-    result = format_top_and_last(leaderboard)
-
-    lines = result.split("\n")
-    assert len(lines) == 4
-    assert lines[0] == "1. Diana — 9597 Salt Rock"
-    assert lines[-1] == "50. Dozach007 — 6108 Salt Rock"
-
-
-def test_format_top_and_last_shows_flower_bid():
-    leaderboard = [{"rank": 1, "username": "Diana", "sfl": 100, "items": None}]
-
-    result = format_top_and_last(leaderboard)
-
-    assert result == "1. Diana — 100 Flower"
-
-
-def test_format_top_and_last_no_data_message_when_empty():
-    assert format_top_and_last([]) == "нет данных"
-
-
-def test_format_top_and_last_parses_double_encoded_json_string():
-    import json
-
-    leaderboard_str = json.dumps(
-        [{"rank": 1, "username": "Diana", "sfl": 100, "items": None}]
-    )
-
-    result = format_top_and_last(leaderboard_str)
-
-    assert result == "1. Diana — 100 Flower"
-
-
 def test_format_bid_parses_double_encoded_json_string():
     import json
 
     ingredients_str = json.dumps({"Gem": 1, "Wood": 0})
 
     assert format_bid(0, ingredients_str) == "Ставка: Gem"
-
-
-class FakePool:
-    def __init__(self, item_name):
-        self._item_name = item_name
-        self.executed = []
-
-    async def fetchrow(self, query, *args):
-        return {"item_name": self._item_name}
-
-    async def execute(self, query, *args):
-        self.executed.append((query, args))
-
-
-async def test_send_auction_ended_fallback_sends_and_records():
-    bot = AsyncMock()
-    bot.send_message.return_value.message_id = 4242
-    pool = FakePool("Genie Lamp")
-
-    await send_auction_ended_fallback(bot, pool, "auction-1", chat_id=777)
-
-    bot.send_message.assert_awaited_once()
-    chat_id, text = bot.send_message.await_args.args
-    assert chat_id == 777
-    assert "Genie Lamp" in text
-    assert "🏁" in text
-
-    assert len(pool.executed) == 1
-    query, args = pool.executed[0]
-    assert "ended_fallback" in query
-    assert args == ("auction-1", 777, 4242)
-
-
-async def test_send_auction_ended_fallback_noop_without_notify_chat_id():
-    bot = AsyncMock()
-    pool = FakePool("Genie Lamp")
-
-    await send_auction_ended_fallback(bot, pool, "auction-1", chat_id=None)
-
-    bot.send_message.assert_not_called()
-    assert pool.executed == []
 
 
 class FakeAuctionPool:
@@ -243,53 +159,6 @@ async def test_send_started_sends_photo_and_records(monkeypatch):
     insert_calls = [c for c in pool.executed if "'started'" in c[0]]
     assert len(insert_calls) == 1
     assert insert_calls[0][1] == ("auction-1", 555, 333, end_at)
-
-
-class FakeResultsPool:
-    def __init__(self, row):
-        self._row = row
-        self.executed = []
-
-    async def fetchrow(self, query, *args):
-        if "sfl_items" in query:
-            return None
-        return self._row
-
-    async def execute(self, query, *args):
-        self.executed.append((query, args))
-
-
-async def test_send_results_notification_shows_top3_and_last(monkeypatch):
-    _patch_notify_chat_id(monkeypatch, 555)
-
-    bot = AsyncMock()
-    bot.send_photo.return_value.message_id = 444
-    row = {
-        "item_name": "Genie Lamp",
-        "item_type": "nft",
-        "my_status": "loser",
-        "participant_count": 275,
-        "leaderboard": [
-            {"rank": 1, "username": "alice", "tickets": 10},
-            {"rank": 2, "username": "bob", "tickets": 8},
-            {"rank": 3, "username": "carol", "tickets": 5},
-            {"rank": 50, "username": "dave", "tickets": 1},
-        ],
-    }
-    pool = FakeResultsPool(row)
-
-    await send_results_notification(bot, pool, "auction-1")
-
-    text = bot.send_photo.await_args.kwargs["caption"]
-    assert "Статус" not in text
-    assert "275" in text
-    assert "alice" in text
-    assert "carol" in text
-    assert "dave" in text  # last place is shown too
-
-    insert_calls = [c for c in pool.executed if "results" in c[0]]
-    assert len(insert_calls) == 1
-    assert insert_calls[0][1] == ("auction-1", 555, 444)
 
 
 class FakeDeletePool:

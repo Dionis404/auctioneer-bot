@@ -12,8 +12,6 @@ def _make_config(**overrides) -> Config:
     base = dict(
         telegram_bot_token="t",
         database_url="postgresql://x",
-        sfl_auth_token="token",
-        sfl_farm_id="farm-1",
         alert_chat_id=999,
         notify_chat_id=None,
         admin_ids=[],
@@ -55,12 +53,11 @@ async def test_schedule_all_pending_creates_deterministic_jobs(scheduler):
         f"delete_reminder_{auction_id}",
         f"started_{auction_id}",
         f"delete_started_{auction_id}",
-        f"results_{auction_id}",
     }
 
     # Calling again must not create duplicate jobs (replace_existing=True, same ids)
     await jobs_auctions.schedule_all_pending(bot, pool, scheduler, config)
-    assert len(scheduler.get_jobs()) == 5
+    assert len(scheduler.get_jobs()) == 4
 
 
 async def test_schedule_all_pending_skips_past_due_moments(scheduler):
@@ -80,86 +77,4 @@ async def test_schedule_all_pending_skips_past_due_moments(scheduler):
     assert job_ids == {
         f"started_{auction_id}",
         f"delete_started_{auction_id}",
-        f"results_{auction_id}",
     }
-
-
-async def test_fetch_and_send_results_reschedules_on_false(scheduler, monkeypatch):
-    bot = AsyncMock()
-    pool = object()
-    config = _make_config()
-
-    monkeypatch.setattr(jobs_auctions, "sync_results", AsyncMock(return_value=False))
-    send_results_mock = AsyncMock()
-    monkeypatch.setattr(jobs_auctions, "send_results_notification", send_results_mock)
-
-    await jobs_auctions.fetch_and_send_results(
-        bot, pool, "auction-x", scheduler, config, attempt=0
-    )
-
-    send_results_mock.assert_not_called()
-    job_ids = {job.id for job in scheduler.get_jobs()}
-    assert "results_auction-x_retry_1" in job_ids
-
-
-async def test_fetch_and_send_results_stops_after_max_retries(scheduler, monkeypatch):
-    bot = AsyncMock()
-    pool = object()
-    config = _make_config(notify_chat_id=555)
-
-    monkeypatch.setattr(jobs_auctions, "sync_results", AsyncMock(return_value=False))
-    send_results_mock = AsyncMock()
-    monkeypatch.setattr(jobs_auctions, "send_results_notification", send_results_mock)
-    fallback_mock = AsyncMock()
-    monkeypatch.setattr(jobs_auctions, "send_auction_ended_fallback", fallback_mock)
-
-    max_attempt = len(jobs_auctions.RESULTS_RETRY_DELAYS_SECONDS)
-    await jobs_auctions.fetch_and_send_results(
-        bot, pool, "auction-x", scheduler, config, attempt=max_attempt
-    )
-
-    send_results_mock.assert_not_called()
-    fallback_mock.assert_awaited_once_with(bot, pool, "auction-x", 555)
-    assert scheduler.get_jobs() == []
-
-
-async def test_fetch_and_send_results_calls_notification_on_success(scheduler, monkeypatch):
-    bot = AsyncMock()
-    pool = object()
-    config = _make_config()
-
-    monkeypatch.setattr(jobs_auctions, "sync_results", AsyncMock(return_value=True))
-    send_results_mock = AsyncMock()
-    monkeypatch.setattr(jobs_auctions, "send_results_notification", send_results_mock)
-
-    await jobs_auctions.fetch_and_send_results(
-        bot, pool, "auction-x", scheduler, config, attempt=0
-    )
-
-    send_results_mock.assert_awaited_once_with(bot, pool, "auction-x")
-    assert scheduler.get_jobs() == []
-
-
-async def test_fetch_and_send_results_sends_alert_on_auth_expired(scheduler, monkeypatch):
-    from app.sfl_client import AuthExpiredError
-
-    bot = AsyncMock()
-    pool = object()
-    config = _make_config()
-
-    async def _raise(*args, **kwargs):
-        raise AuthExpiredError("expired")
-
-    monkeypatch.setattr(jobs_auctions, "sync_results", _raise)
-    send_alert_mock = AsyncMock()
-    monkeypatch.setattr(jobs_auctions, "send_alert", send_alert_mock)
-    send_results_mock = AsyncMock()
-    monkeypatch.setattr(jobs_auctions, "send_results_notification", send_results_mock)
-
-    await jobs_auctions.fetch_and_send_results(
-        bot, pool, "auction-x", scheduler, config, attempt=0
-    )
-
-    send_alert_mock.assert_awaited_once()
-    send_results_mock.assert_not_called()
-    assert scheduler.get_jobs() == []

@@ -73,32 +73,6 @@ def format_bid(sfl_price, ingredients) -> str:
     return "Ставка: —"
 
 
-def _entry_bid(entry: dict) -> str:
-    sfl = entry.get("sfl")
-    if sfl:
-        return f"{sfl} Flower"
-    items = entry.get("items")
-    if items:
-        name, amount = next(iter(items.items()))
-        return f"{amount} {name}"
-    return "—"
-
-
-def format_top_and_last(leaderboard: list[dict]) -> str:
-    leaderboard = _coerce_jsonb(leaderboard)
-
-    entries = sorted(
-        (entry for entry in (leaderboard or []) if entry.get("rank") is not None),
-        key=lambda entry: entry["rank"],
-    )
-
-    lines = [
-        f"{entry['rank']}. {entry.get('username')} — {_entry_bid(entry)}"
-        for entry in entries
-    ]
-    return "\n".join(lines) if lines else "нет данных"
-
-
 async def send_reminder(bot: Bot, pool: Pool, auction_id: str) -> None:
     notify_chat_id = _notify_chat_id()
     if notify_chat_id is None:
@@ -181,51 +155,6 @@ async def send_started(bot: Bot, pool: Pool, auction_id: str) -> None:
     )
 
 
-async def send_results_notification(bot: Bot, pool: Pool, auction_id: str) -> None:
-    notify_chat_id = _notify_chat_id()
-    if notify_chat_id is None:
-        logger.warning(
-            "NOTIFY_CHAT_ID is not configured, dropping results notification for auction_id=%s",
-            auction_id,
-        )
-        return
-
-    row = await pool.fetchrow(
-        """
-        SELECT a.item_name, a.item_type, r.my_status, r.participant_count, r.leaderboard
-        FROM auction_results r
-        JOIN auctions a ON a.auction_id = r.auction_id
-        WHERE r.auction_id = $1
-        """,
-        auction_id,
-    )
-    if row is None:
-        logger.warning("send_results_notification: results not found: %s", auction_id)
-        return
-
-    item_name = row["item_name"]
-    item_type = row["item_type"]
-
-    text = (
-        f"🏁 Аукцион завершён: <b>{item_name}</b>\n"
-        f"Участников: {row['participant_count']}\n\n"
-        f"Топ-3 и последнее место:\n{format_top_and_last(row['leaderboard'])}"
-    )
-
-    image_url = await get_item_image(pool, item_name, item_type)
-    message = await send_with_image_preview(bot, notify_chat_id, text, image_url, auction_id)
-
-    await pool.execute(
-        """
-        INSERT INTO auction_notifications (auction_id, kind, chat_id, message_id, delete_at)
-        VALUES ($1, 'results', $2, $3, NULL)
-        """,
-        auction_id,
-        notify_chat_id,
-        message.message_id,
-    )
-
-
 async def delete_notification(bot: Bot, pool: Pool, auction_id: str, kind: str) -> None:
     row = await pool.fetchrow(
         """
@@ -254,44 +183,4 @@ async def delete_notification(bot: Bot, pool: Pool, auction_id: str, kind: str) 
         """,
         auction_id,
         kind,
-    )
-
-
-async def send_alert(bot: Bot, alert_chat_id: int | None, text: str) -> None:
-    if alert_chat_id is None:
-        logger.warning("ALERT_CHAT_ID is not configured, dropping alert: %s", text)
-        return
-    await bot.send_message(alert_chat_id, text)
-
-
-async def send_auction_ended_fallback(
-    bot: Bot, pool: Pool, auction_id: str, chat_id: int | None
-) -> None:
-    if chat_id is None:
-        logger.warning(
-            "NOTIFY_CHAT_ID is not configured, dropping ended_fallback for auction_id=%s",
-            auction_id,
-        )
-        return
-
-    row = await pool.fetchrow(
-        "SELECT item_name FROM auctions WHERE auction_id = $1", auction_id
-    )
-    item_name = row["item_name"] if row else auction_id
-
-    text = (
-        f"🏁 Аукцион завершён: <b>{item_name}</b>. "
-        "Результаты пока недоступны — появятся позже."
-    )
-
-    message = await bot.send_message(chat_id, text)
-
-    await pool.execute(
-        """
-        INSERT INTO auction_notifications (auction_id, kind, chat_id, message_id, delete_at)
-        VALUES ($1, 'ended_fallback', $2, $3, NULL)
-        """,
-        auction_id,
-        chat_id,
-        message.message_id,
     )

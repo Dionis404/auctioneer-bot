@@ -9,24 +9,15 @@ from asyncpg import Pool
 
 from app.config import Config
 from app.images import get_item_image
-from app.jobs.auctions import schedule_all_pending
-from app.jobs.notifications import (
-    format_bid,
-    format_msk_time,
-    format_top_and_last,
-    send_alert,
-    send_with_image_preview,
-)
-from app.sfl_client import AuthExpiredError
-from app.sync import sync_auctions, sync_results
+from app.jobs.notifications import format_bid, format_msk_time, send_with_image_preview
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="commands")
 
-JOB_PREFIXES = ("reminder_", "started_", "results_", "delete_")
+JOB_PREFIXES = ("reminder_", "started_", "delete_")
 
-TEST_NOTIFICATION_TYPES = ("reminder", "started", "results")
+TEST_NOTIFICATION_TYPES = ("reminder", "started")
 
 
 def _is_admin(message: Message, config: Config) -> bool:
@@ -70,99 +61,6 @@ async def cmd_status(message: Message, scheduler: AsyncIOScheduler, config: Conf
     lines.append(
         f"Ближайший запуск: {next_run.isoformat() if next_run else 'нет запланированных'}"
     )
-
-    await message.answer("\n".join(lines))
-
-
-@router.message(Command("update_auctions"))
-async def cmd_update_auctions(
-    message: Message,
-    bot: Bot,
-    db_pool: Pool,
-    scheduler: AsyncIOScheduler,
-    config: Config,
-) -> None:
-    if not _is_admin(message, config):
-        return
-
-    await message.answer("🔄 Обновляю список аукционов...")
-
-    try:
-        affected = await sync_auctions(db_pool, config.sfl_auth_token)
-    except AuthExpiredError:
-        await message.answer(
-            "❌ Токен авторизации SFL истёк, нужно обновить SFL_AUTH_TOKEN"
-        )
-        await send_alert(
-            bot,
-            config.alert_chat_id,
-            "SFL auth token expired, нужно обновить SFL_AUTH_TOKEN",
-        )
-        return
-
-    await schedule_all_pending(bot, db_pool, scheduler, config)
-
-    summary = get_scheduler_summary(scheduler)
-    await message.answer(
-        "✅ Обновление завершено.\n"
-        f"Обработано аукционов: {affected}\n"
-        f"Всего job'ов в шедулере: {summary['total']}"
-    )
-
-
-@router.message(Command("backfill_results"))
-async def cmd_backfill_results(
-    message: Message,
-    db_pool: Pool,
-    config: Config,
-) -> None:
-    if not _is_admin(message, config):
-        return
-
-    rows = await db_pool.fetch(
-        """
-        SELECT a.auction_id
-        FROM auctions a
-        LEFT JOIN auction_results r ON r.auction_id = a.auction_id
-        WHERE a.end_at < now()
-          AND (
-              a.results_fetched = false
-              OR r.participant_count IS NULL
-              OR r.leaderboard IS NULL
-          )
-        """
-    )
-
-    if not rows:
-        await message.answer("Нет завершённых аукционов без результатов.")
-        return
-
-    await message.answer(
-        f"⚙️ Догружаю результаты для {len(rows)} завершённых аукционов..."
-    )
-
-    fetched = 0
-    not_ready = 0
-
-    for row in rows:
-        try:
-            success = await sync_results(
-                db_pool, row["auction_id"], config.sfl_farm_id, config.sfl_auth_token
-            )
-        except AuthExpiredError:
-            await message.answer(
-                "❌ Токен авторизации SFL истёк, нужно обновить SFL_AUTH_TOKEN"
-            )
-            return
-
-        if success:
-            fetched += 1
-        else:
-            not_ready += 1
-
-    lines = ["✅ Готово.", f"Успешно достано: {fetched}"]
-    if not_ready:
-        lines.append(f"API ещё не отдал (попробуйте позже): {not_ready}")
 
     await message.answer("\n".join(lines))
 
@@ -272,25 +170,12 @@ async def cmd_test_notification(
             f"Лотов: 50\n"
             f"Начало: {format_msk_time(start_at)}"
         )
-    elif notification_type == "started":
+    else:
         caption = (
             "🔨 Аукцион стартовал!\n\n"
             f"Предмет: <b>{item_name}</b> ({item_type})\n"
             f"{format_bid(1, None)}\n"
             f"Лотов: 50"
-        )
-    else:
-        leaderboard = [
-            {"rank": 1, "username": "test_user_1", "sfl": 0, "items": {"Gem": 9597}},
-            {"rank": 2, "username": "test_user_2", "sfl": 0, "items": {"Gem": 9185}},
-            {"rank": 3, "username": "test_user_3", "sfl": 0, "items": {"Gem": 8600}},
-            {"rank": 50, "username": "test_user_4", "sfl": 0, "items": {"Gem": 6108}},
-        ]
-        caption = (
-            "🏆 Результаты аукциона (тест)\n\n"
-            f"Предмет: <b>{item_name}</b> ({item_type})\n"
-            f"Участников: 275\n\n"
-            f"Топ-3 и последнее место:\n{format_top_and_last(leaderboard)}"
         )
 
     try:
