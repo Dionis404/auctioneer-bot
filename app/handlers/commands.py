@@ -203,9 +203,9 @@ async def cmd_next_auction(
     item_type = row["item_type"]
 
     caption = (
+        "Ближайший аукцион\n\n"
         "⏰ <b>{item_name}</b> ({item_type})\n"
         "{divider}\n"
-        "Ближайший аукцион\n\n"
         "💰 {bid}\n"
         "🎟 Лотов: {supply}\n\n"
         "🕑 Начало: {start_at}"
