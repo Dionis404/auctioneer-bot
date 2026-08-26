@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -26,6 +27,10 @@ router = Router(name="commands")
 JOB_PREFIXES = ("reminder_", "started_", "delete_")
 
 TEST_NOTIFICATION_TYPES = ("reminder", "started")
+
+# Community API rate limit is ~1 request/5s per IP; space out sequential
+# per-auction requests in /backfill_results to avoid immediately hitting it.
+BACKFILL_REQUEST_DELAY_SECONDS = 5
 
 
 def _is_admin(message: Message, config: Config) -> bool:
@@ -144,7 +149,10 @@ async def cmd_backfill_results(
     fetched = 0
     not_ready = 0
 
-    for row in rows:
+    for index, row in enumerate(rows):
+        if index > 0:
+            await asyncio.sleep(BACKFILL_REQUEST_DELAY_SECONDS)
+
         try:
             success = await sync_results(db_pool, row["auction_id"], config.sfl_api_key)
         except AuthExpiredError:

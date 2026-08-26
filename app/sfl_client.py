@@ -80,22 +80,42 @@ async def fetch_auctions(api_key: str | None) -> dict:
 
 async def fetch_auction_results(auction_id: str, api_key: str | None) -> dict | None:
     client = _get_client()
-    response = await client.get(
-        "/community/data",
-        params={"type": "auctionResults", "auctionId": auction_id},
-        headers=_headers(api_key),
-    )
 
-    if response.status_code == 401:
-        raise AuthExpiredError("SFL API key rejected (401) for auctionResults")
+    for attempt, delay in enumerate([0, *RATE_LIMIT_RETRY_DELAYS_SECONDS]):
+        if delay:
+            logger.warning(
+                "fetch_auction_results rate limited (429), retrying in %ss (attempt %s): auction_id=%s",
+                delay,
+                attempt,
+                auction_id,
+            )
+            await asyncio.sleep(delay)
 
-    if response.status_code != 200:
-        logger.debug(
-            "fetch_auction_results not ready: auction_id=%s status=%s body=%s",
-            auction_id,
-            response.status_code,
-            response.text,
+        response = await client.get(
+            "/community/data",
+            params={"type": "auctionResults", "auctionId": auction_id},
+            headers=_headers(api_key),
         )
-        return None
 
-    return response.json().get("data")
+        if response.status_code == 401:
+            raise AuthExpiredError("SFL API key rejected (401) for auctionResults")
+
+        if response.status_code == 429:
+            continue
+
+        if response.status_code != 200:
+            logger.debug(
+                "fetch_auction_results not ready: auction_id=%s status=%s body=%s",
+                auction_id,
+                response.status_code,
+                response.text,
+            )
+            return None
+
+        return response.json().get("data")
+
+    logger.error(
+        "fetch_auction_results failed: still rate limited after all retries: auction_id=%s",
+        auction_id,
+    )
+    return None

@@ -66,6 +66,8 @@ async def test_fetches_results_for_each_auction(monkeypatch):
 
     sync_results_mock = AsyncMock(side_effect=[True, False, True])
     monkeypatch.setattr(commands_module, "sync_results", sync_results_mock)
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(commands_module.asyncio, "sleep", sleep_mock)
 
     await cmd_backfill_results(message, bot, pool, config)
 
@@ -75,6 +77,24 @@ async def test_fetches_results_for_each_auction(monkeypatch):
     final_text = message.answer.await_args_list[-1].args[0]
     assert "Успешно достано: 2" in final_text
     assert "1" in final_text
+
+
+async def test_delays_between_sequential_requests(monkeypatch):
+    message = _make_message()
+    bot = AsyncMock()
+    pool = FakePool([{"auction_id": "a1"}, {"auction_id": "a2"}, {"auction_id": "a3"}])
+    config = _make_config()
+
+    sync_results_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(commands_module, "sync_results", sync_results_mock)
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(commands_module.asyncio, "sleep", sleep_mock)
+
+    await cmd_backfill_results(message, bot, pool, config)
+
+    # No sleep before the first request, one sleep between each subsequent pair.
+    assert sleep_mock.await_count == 2
+    sleep_mock.assert_awaited_with(commands_module.BACKFILL_REQUEST_DELAY_SECONDS)
 
 
 async def test_stops_on_auth_expired(monkeypatch):

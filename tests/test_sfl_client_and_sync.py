@@ -181,6 +181,45 @@ async def test_fetch_auction_results_returns_none_on_404():
 
 
 @respx.mock
+async def test_fetch_auction_results_retries_on_429_then_succeeds(monkeypatch):
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(sfl_client.asyncio, "sleep", fake_sleep)
+
+    route = respx.get("https://api.sunflower-land.com/community/data").mock(
+        side_effect=[
+            Response(429),
+            Response(200, json=COMPLETE_RESPONSE),
+        ]
+    )
+
+    result = await sfl_client.fetch_auction_results("auction-1", "key")
+
+    assert route.call_count == 2
+    assert sleep_calls == [5]
+    assert result == COMPLETE_RESPONSE["data"]
+
+
+@respx.mock
+async def test_fetch_auction_results_returns_none_after_exhausting_429_retries(monkeypatch):
+    async def fake_sleep(seconds):
+        pass
+
+    monkeypatch.setattr(sfl_client.asyncio, "sleep", fake_sleep)
+
+    respx.get("https://api.sunflower-land.com/community/data").mock(
+        return_value=Response(429)
+    )
+
+    result = await sfl_client.fetch_auction_results("auction-1", "key")
+
+    assert result is None
+
+
+@respx.mock
 async def test_sync_results_complete_status_saves_and_returns_true():
     respx.get("https://api.sunflower-land.com/community/data").mock(
         return_value=Response(200, json=COMPLETE_RESPONSE)
