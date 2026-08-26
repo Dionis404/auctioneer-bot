@@ -6,10 +6,11 @@ Sunflower Land по данным, уже накопленным в базе: н�
 APScheduler для планирования уведомлений и asyncpg для доступа к
 PostgreSQL.
 
-Интеграция с api.sunflower-land.com отключена (нет доступного
-SFL_AUTH_TOKEN) — бот больше не загружает новые аукционы и не запрашивает
-их результаты по API. Планирование работает только по аукционам, уже
-записанным в таблицу `auctions`.
+Результаты аукционов запрашиваются через официальный Community API
+(`GET /community/data?type=auctionResults`, авторизация — `x-api-key`).
+Список самих аукционов по-прежнему не подтягивается по API — планирование
+reminder/started работает только по аукционам, уже записанным в таблицу
+`auctions`.
 
 ## Стек
 
@@ -27,9 +28,10 @@ SFL_AUTH_TOKEN) — бот больше не загружает новые ау�
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота (от [@BotFather](https://t.me/BotFather)) |
 | `DATABASE_URL` | Строка подключения к PostgreSQL, например `postgresql://user:password@host:5432/auctioneer` |
+| `SFL_API_KEY` | Официальный API-ключ Sunflower Land (Settings → Developer Options → API Key в игре) для запроса результатов аукционов |
 | `ALERT_CHAT_ID` | Чат для `/next_auction` |
-| `NOTIFY_CHAT_ID` | Чат, куда шлются уведомления об аукционах (напоминания, старт) |
-| `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/next_auction`, `/test_notification` |
+| `NOTIFY_CHAT_ID` | Чат, куда шлются уведомления об аукционах (напоминания, старт, результаты) |
+| `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/next_auction`, `/test_notification`, а также технические алерты об ошибках API в личку |
 | `SITE_IMAGE_BASE_URL` | База для картинок предметов, по умолчанию `https://goblincodex.fun/sprites/` |
 
 ## Локальный запуск

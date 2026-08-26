@@ -11,6 +11,8 @@ from app.db import create_pool, run_migrations
 from app.handlers import commands, fallback
 from app.image_compose import close_client as close_image_client
 from app.jobs.auctions import schedule_all_pending
+from app.sfl_client import close_client as close_sfl_client
+from app.sfl_client import init_client as init_sfl_client
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +27,8 @@ async def main() -> None:
 
     pool = await create_pool(config.database_url)
     await run_migrations(pool)
+
+    init_sfl_client()
 
     bot = Bot(
         token=config.telegram_bot_token,
@@ -51,6 +55,7 @@ async def main() -> None:
     finally:
         scheduler.shutdown(wait=False)
         await close_image_client()
+        await close_sfl_client()
         await pool.close()
         await bot.session.close()
 

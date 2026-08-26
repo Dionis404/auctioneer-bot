@@ -73,6 +73,32 @@ def format_bid(sfl_price, ingredients) -> str:
     return "Ставка: —"
 
 
+def _entry_bid(entry: dict) -> str:
+    sfl = entry.get("sfl")
+    if sfl:
+        return f"{sfl} Flower"
+    items = entry.get("items")
+    if items:
+        name, amount = next(iter(items.items()))
+        return f"{amount} {name}"
+    return "—"
+
+
+def format_top_and_last(leaderboard: list[dict]) -> str:
+    leaderboard = _coerce_jsonb(leaderboard)
+
+    entries = sorted(
+        (entry for entry in (leaderboard or []) if entry.get("rank") is not None),
+        key=lambda entry: entry["rank"],
+    )
+
+    lines = [
+        f"{entry['rank']}. {entry.get('username') or 'без ника'} — {_entry_bid(entry)}"
+        for entry in entries
+    ]
+    return "\n".join(lines) if lines else "нет данных"
+
+
 async def send_reminder(bot: Bot, pool: Pool, auction_id: str) -> None:
     notify_chat_id = _notify_chat_id()
     if notify_chat_id is None:
@@ -153,6 +179,63 @@ async def send_started(bot: Bot, pool: Pool, auction_id: str) -> None:
         message.message_id,
         row["end_at"],
     )
+
+
+async def send_results_notification(bot: Bot, pool: Pool, auction_id: str) -> None:
+    notify_chat_id = _notify_chat_id()
+    if notify_chat_id is None:
+        logger.warning(
+            "NOTIFY_CHAT_ID is not configured, dropping results notification for auction_id=%s",
+            auction_id,
+        )
+        return
+
+    row = await pool.fetchrow(
+        """
+        SELECT a.item_name, a.item_type, r.participant_count, r.leaderboard
+        FROM auction_results r
+        JOIN auctions a ON a.auction_id = r.auction_id
+        WHERE r.auction_id = $1
+        """,
+        auction_id,
+    )
+    if row is None:
+        logger.warning("send_results_notification: results not found: %s", auction_id)
+        return
+
+    item_name = row["item_name"]
+    item_type = row["item_type"]
+
+    text = (
+        f"🏁 Аукцион завершён: <b>{item_name}</b>\n"
+        f"Участников: {row['participant_count']}\n\n"
+        f"Топ-3 и последнее место:\n{format_top_and_last(row['leaderboard'])}"
+    )
+
+    image_url = await get_item_image(pool, item_name, item_type)
+    message = await send_with_image_preview(bot, notify_chat_id, text, image_url, auction_id)
+
+    await pool.execute(
+        """
+        INSERT INTO auction_notifications (auction_id, kind, chat_id, message_id, delete_at)
+        VALUES ($1, 'results', $2, $3, NULL)
+        """,
+        auction_id,
+        notify_chat_id,
+        message.message_id,
+    )
+
+
+async def send_admin_alert(bot: Bot, admin_ids: list[int], text: str) -> None:
+    if not admin_ids:
+        logger.warning("ADMIN_IDS is not configured, dropping alert: %s", text)
+        return
+
+    for admin_id in admin_ids:
+        try:
+            await bot.send_message(admin_id, text)
+        except Exception:
+            logger.exception("send_admin_alert: failed to message admin_id=%s", admin_id)
 
 
 async def delete_notification(bot: Bot, pool: Pool, auction_id: str, kind: str) -> None:

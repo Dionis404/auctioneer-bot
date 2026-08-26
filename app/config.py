@@ -24,6 +24,8 @@ class Config:
     telegram_bot_token: str
     database_url: str
 
+    sfl_api_key: str | None
+
     alert_chat_id: int | None
     notify_chat_id: int | None
     admin_ids: list[int] = field(default_factory=list)
@@ -38,6 +40,7 @@ def load_config() -> Config:
     return Config(
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         database_url=_require("DATABASE_URL"),
+        sfl_api_key=os.getenv("SFL_API_KEY"),
         alert_chat_id=int(alert_chat_id) if alert_chat_id else None,
         notify_chat_id=int(notify_chat_id) if notify_chat_id else None,
         admin_ids=_parse_ids(os.getenv("ADMIN_IDS")),

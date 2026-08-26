@@ -20,6 +20,7 @@ def _make_config(**overrides) -> Config:
     base = dict(
         telegram_bot_token="t",
         database_url="postgresql://x",
+        sfl_api_key="key",
         alert_chat_id=1,
         notify_chat_id=999,
         admin_ids=[42],

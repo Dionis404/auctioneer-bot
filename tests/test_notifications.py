@@ -9,7 +9,9 @@ from app.jobs.notifications import (
     delete_notification,
     format_bid,
     format_msk_time,
+    send_admin_alert,
     send_reminder,
+    send_results_notification,
     send_started,
 )
 
@@ -159,6 +161,82 @@ async def test_send_started_sends_photo_and_records(monkeypatch):
     insert_calls = [c for c in pool.executed if "'started'" in c[0]]
     assert len(insert_calls) == 1
     assert insert_calls[0][1] == ("auction-1", 555, 333, end_at)
+
+
+class FakeResultsPool:
+    def __init__(self, row, sprite_row=None):
+        self._row = row
+        self._sprite_row = sprite_row
+        self.executed = []
+
+    async def fetchrow(self, query, *args):
+        if "sfl_items" in query:
+            return self._sprite_row
+        return self._row
+
+    async def execute(self, query, *args):
+        self.executed.append((query, args))
+
+
+async def test_send_results_notification_shows_top_and_last(monkeypatch):
+    _patch_notify_chat_id(monkeypatch, 555)
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 777
+    row = {
+        "item_name": "Genie Lamp",
+        "item_type": "nft",
+        "participant_count": 136,
+        "leaderboard": [
+            {"rank": 1, "username": "AVF", "sfl": 0, "items": {"Floater": 13448}},
+            {"rank": 2, "username": "SypusM", "sfl": 0, "items": {"Floater": 6419}},
+            {"rank": 3, "username": "nekodesu", "sfl": 0, "items": {"Floater": 5800}},
+            {"rank": 15, "username": "Amadeus444", "sfl": 0, "items": {"Floater": 4711}},
+        ],
+    }
+    pool = FakeResultsPool(row)
+
+    await send_results_notification(bot, pool, "auction-1")
+
+    text = bot.send_photo.await_args.kwargs["caption"]
+    assert "Genie Lamp" in text
+    assert "136" in text
+    assert "AVF" in text
+    assert "Amadeus444" in text
+    assert "Статус" not in text
+    assert "Победа" not in text
+
+    insert_calls = [c for c in pool.executed if "results" in c[0]]
+    assert len(insert_calls) == 1
+    assert insert_calls[0][1] == ("auction-1", 555, 777)
+
+
+async def test_send_results_notification_noop_without_notify_chat_id(monkeypatch):
+    _patch_notify_chat_id(monkeypatch, None)
+
+    bot = AsyncMock()
+    pool = FakeResultsPool({"item_name": "x", "item_type": "nft"})
+
+    await send_results_notification(bot, pool, "auction-1")
+
+    bot.send_photo.assert_not_called()
+
+
+async def test_send_admin_alert_messages_every_admin():
+    bot = AsyncMock()
+
+    await send_admin_alert(bot, [111, 222], "test alert")
+
+    assert bot.send_message.await_args_list[0].args == (111, "test alert")
+    assert bot.send_message.await_args_list[1].args == (222, "test alert")
+
+
+async def test_send_admin_alert_noop_without_admins():
+    bot = AsyncMock()
+
+    await send_admin_alert(bot, [], "test alert")
+
+    bot.send_message.assert_not_called()
 
 
 class FakeDeletePool:
