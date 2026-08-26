@@ -12,6 +12,7 @@ from app.config import Config
 from app.images import get_item_image
 from app.jobs.auctions import schedule_all_pending
 from app.jobs.notifications import (
+    DIVIDER,
     format_bid,
     format_msk_time,
     send_admin_alert,
@@ -202,13 +203,16 @@ async def cmd_next_auction(
     item_type = row["item_type"]
 
     caption = (
-        "⏰ Ближайший аукцион: <b>{item_name}</b> ({item_type})\n"
-        "{bid}\n"
-        "Лотов: {supply}\n"
-        "Начало: {start_at}"
+        "⏰ <b>{item_name}</b> ({item_type})\n"
+        "{divider}\n"
+        "Ближайший аукцион\n\n"
+        "💰 {bid}\n"
+        "🎟 Лотов: {supply}\n\n"
+        "🕑 Начало: {start_at}"
     ).format(
         item_name=item_name,
         item_type=item_type,
+        divider=DIVIDER,
         bid=format_bid(row["sfl_price"], row["ingredients"]),
         supply=row["supply"],
         start_at=format_msk_time(row["start_at"]),
@@ -267,18 +271,18 @@ async def cmd_test_notification(
     if notification_type == "reminder":
         start_at = datetime.now(timezone.utc) + timedelta(hours=1)
         caption = (
-            "⏰ Аукцион начнётся через 1 час!\n\n"
-            f"Предмет: <b>{item_name}</b> ({item_type})\n"
-            f"{format_bid(1, None)}\n"
-            f"Лотов: 50\n"
-            f"Начало: {format_msk_time(start_at)}"
+            f"⏰ <b>{item_name}</b> ({item_type})\n"
+            f"{DIVIDER}\n"
+            f"Через час старт аукциона!\n\n"
+            f"💰 {format_bid(1, None)}\n"
+            f"🎟 Лотов: 50\n\n"
+            f"🕑 Начало: {format_msk_time(start_at)}"
         )
     else:
         caption = (
-            "🔨 Аукцион стартовал!\n\n"
-            f"Предмет: <b>{item_name}</b> ({item_type})\n"
-            f"{format_bid(1, None)}\n"
-            f"Лотов: 50"
+            f"🔨 <b>{item_name}</b>\n"
+            f"{DIVIDER}\n"
+            f"Аукцион стартовал! Успей сделать ставку."
         )
 
     try:
