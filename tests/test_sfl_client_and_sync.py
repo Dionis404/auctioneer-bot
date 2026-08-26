@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 import respx
-from httpx import Response
+from httpx import HTTPStatusError, Response
 
 from app import sfl_client, sync
 from app.jobs.notifications import format_top_and_last
@@ -259,6 +259,45 @@ async def test_fetch_auctions_raises_auth_expired_on_401():
 
     with pytest.raises(sfl_client.AuthExpiredError):
         await sfl_client.fetch_auctions("bad-key")
+
+
+@respx.mock
+async def test_fetch_auctions_retries_on_429_then_succeeds(monkeypatch):
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(sfl_client.asyncio, "sleep", fake_sleep)
+
+    route = respx.get("https://api.sunflower-land.com/community/data").mock(
+        side_effect=[
+            Response(429),
+            Response(429),
+            Response(200, json=AUCTIONS_LIST_RESPONSE),
+        ]
+    )
+
+    result = await sfl_client.fetch_auctions("key")
+
+    assert route.call_count == 3
+    assert sleep_calls == [5, 10]
+    assert result == AUCTIONS_LIST_RESPONSE["data"]
+
+
+@respx.mock
+async def test_fetch_auctions_raises_after_exhausting_429_retries(monkeypatch):
+    async def fake_sleep(seconds):
+        pass
+
+    monkeypatch.setattr(sfl_client.asyncio, "sleep", fake_sleep)
+
+    respx.get("https://api.sunflower-land.com/community/data").mock(
+        return_value=Response(429)
+    )
+
+    with pytest.raises(HTTPStatusError):
+        await sfl_client.fetch_auctions("key")
 
 
 @respx.mock

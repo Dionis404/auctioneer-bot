@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import httpx
@@ -6,6 +7,9 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.sunflower-land.com"
 TIMEOUT = 10.0
+
+# Community API rate limit is ~1 request/5s per IP (doubling to 10s if hammered).
+RATE_LIMIT_RETRY_DELAYS_SECONDS = [5, 10, 15, 30]
 
 _client: httpx.AsyncClient | None = None
 
@@ -38,24 +42,40 @@ def _get_client() -> httpx.AsyncClient:
 
 async def fetch_auctions(api_key: str | None) -> dict:
     client = _get_client()
-    response = await client.get(
-        "/community/data",
-        params={"type": "auctions"},
-        headers=_headers(api_key),
-    )
 
-    if response.status_code == 401:
-        raise AuthExpiredError("SFL API key rejected (401) for auctions")
+    for attempt, delay in enumerate([0, *RATE_LIMIT_RETRY_DELAYS_SECONDS]):
+        if delay:
+            logger.warning(
+                "fetch_auctions rate limited (429), retrying in %ss (attempt %s)",
+                delay,
+                attempt,
+            )
+            await asyncio.sleep(delay)
 
-    if response.status_code != 200:
-        logger.error(
-            "fetch_auctions failed: status=%s body=%s",
-            response.status_code,
-            response.text,
+        response = await client.get(
+            "/community/data",
+            params={"type": "auctions"},
+            headers=_headers(api_key),
         )
-        response.raise_for_status()
 
-    return response.json().get("data", {})
+        if response.status_code == 401:
+            raise AuthExpiredError("SFL API key rejected (401) for auctions")
+
+        if response.status_code == 429:
+            continue
+
+        if response.status_code != 200:
+            logger.error(
+                "fetch_auctions failed: status=%s body=%s",
+                response.status_code,
+                response.text,
+            )
+            response.raise_for_status()
+
+        return response.json().get("data", {})
+
+    logger.error("fetch_auctions failed: still rate limited after all retries")
+    response.raise_for_status()
 
 
 async def fetch_auction_results(auction_id: str, api_key: str | None) -> dict | None:
