@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 router = Router(name="fallback")
 
-KNOWN_ADMIN_COMMANDS = "/status, /next_auction, /test_notification"
+KNOWN_ADMIN_COMMANDS = "/status, /next_auction, /backfill_results, /test_notification"
 
 BOT_INFO_TEXT = (
     "Я бот для уведомлений об аукционах Sunflower Land.\n"
