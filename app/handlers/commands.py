@@ -185,10 +185,6 @@ async def cmd_next_auction(
     if not _is_admin(message, config):
         return
 
-    if config.alert_chat_id is None:
-        await message.answer("ALERT_CHAT_ID не настроен.")
-        return
-
     row = await db_pool.fetchrow(
         """
         SELECT item_name, item_type, supply, sfl_price, ingredients, start_at
@@ -219,16 +215,13 @@ async def cmd_next_auction(
     )
 
     image_url = await get_item_image(db_pool, item_name, item_type)
+    chat_id = message.chat.id
 
     try:
-        await send_with_image_preview(
-            bot, config.alert_chat_id, caption, image_url, item_name
-        )
+        await send_with_image_preview(bot, chat_id, caption, image_url, item_name)
     except Exception:
         logger.exception("next_auction: failed to send preview, falling back to text")
-        await bot.send_message(config.alert_chat_id, caption)
-
-    await message.answer("Информация о ближайшем аукционе отправлена.")
+        await bot.send_message(chat_id, caption)
 
 
 @router.message(Command("test_notification"))

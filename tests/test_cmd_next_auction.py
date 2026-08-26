@@ -30,9 +30,10 @@ def _make_config(**overrides) -> Config:
     return Config(**base)
 
 
-def _make_message(user_id: int = 42) -> MagicMock:
+def _make_message(user_id: int = 42, chat_id: int = 555) -> MagicMock:
     message = MagicMock()
     message.from_user.id = user_id
+    message.chat.id = chat_id
     message.answer = AsyncMock()
     return message
 
@@ -60,18 +61,6 @@ async def test_rejects_non_admin():
     message.answer.assert_not_called()
 
 
-async def test_missing_alert_chat_id():
-    message = _make_message()
-    bot = AsyncMock()
-    pool = FakePool({"item_name": "Genie Lamp", "item_type": "nft"})
-    config = _make_config(alert_chat_id=None)
-
-    await cmd_next_auction(message, bot, pool, config)
-
-    bot.send_photo.assert_not_called()
-    message.answer.assert_awaited_once_with("ALERT_CHAT_ID не настроен.")
-
-
 async def test_no_upcoming_auctions():
     message = _make_message()
     bot = AsyncMock()
@@ -84,8 +73,8 @@ async def test_no_upcoming_auctions():
     message.answer.assert_awaited_once_with("Нет запланированных аукционов.")
 
 
-async def test_sends_next_auction_to_alert_chat():
-    message = _make_message()
+async def test_sends_next_auction_to_calling_chat():
+    message = _make_message(chat_id=777)
     bot = AsyncMock()
     start_at = datetime.now(timezone.utc) + timedelta(hours=2)
     row = {
@@ -107,13 +96,11 @@ async def test_sends_next_auction_to_alert_chat():
 
     call_args, call_kwargs = bot.send_photo.await_args
     chat_id = call_args[0] if call_args else call_kwargs.get("chat_id")
-    assert chat_id == 1  # alert_chat_id, not notify_chat_id
+    assert chat_id == 777  # chat the command was called from
 
     caption = kwargs["caption"]
     assert "Genie Lamp" in caption
     assert "Ставка: Flower" in caption
     assert "Лотов: 50" in caption
 
-    message.answer.assert_awaited_once_with(
-        "Информация о ближайшем аукционе отправлена."
-    )
+    message.answer.assert_not_called()
