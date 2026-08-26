@@ -163,3 +163,43 @@ async def test_fetch_and_send_results_sends_admin_alert_on_auth_expired(schedule
     assert "SFL_API_KEY" in alert_args[2]
     send_results_mock.assert_not_called()
     assert scheduler.get_jobs() == []
+
+
+async def test_refresh_auctions_job_syncs_then_schedules(scheduler, monkeypatch):
+    bot = AsyncMock()
+    pool = object()
+    config = _make_config()
+
+    sync_auctions_mock = AsyncMock(return_value=5)
+    monkeypatch.setattr(jobs_auctions, "sync_auctions", sync_auctions_mock)
+    schedule_mock = AsyncMock()
+    monkeypatch.setattr(jobs_auctions, "schedule_all_pending", schedule_mock)
+
+    await jobs_auctions.refresh_auctions_job(bot, pool, scheduler, config)
+
+    sync_auctions_mock.assert_awaited_once_with(pool, "key")
+    schedule_mock.assert_awaited_once_with(bot, pool, scheduler, config)
+
+
+async def test_refresh_auctions_job_sends_admin_alert_on_auth_expired(scheduler, monkeypatch):
+    from app.sfl_client import AuthExpiredError
+
+    bot = AsyncMock()
+    pool = object()
+    config = _make_config(admin_ids=[111, 222])
+
+    monkeypatch.setattr(
+        jobs_auctions, "sync_auctions", AsyncMock(side_effect=AuthExpiredError("rejected"))
+    )
+    send_alert_mock = AsyncMock()
+    monkeypatch.setattr(jobs_auctions, "send_admin_alert", send_alert_mock)
+    schedule_mock = AsyncMock()
+    monkeypatch.setattr(jobs_auctions, "schedule_all_pending", schedule_mock)
+
+    await jobs_auctions.refresh_auctions_job(bot, pool, scheduler, config)
+
+    send_alert_mock.assert_awaited_once()
+    alert_args = send_alert_mock.await_args.args
+    assert alert_args[1] == [111, 222]
+    assert "SFL_API_KEY" in alert_args[2]
+    schedule_mock.assert_not_called()

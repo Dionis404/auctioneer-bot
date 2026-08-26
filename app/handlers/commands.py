@@ -9,6 +9,7 @@ from asyncpg import Pool
 
 from app.config import Config
 from app.images import get_item_image
+from app.jobs.auctions import schedule_all_pending
 from app.jobs.notifications import (
     format_bid,
     format_msk_time,
@@ -16,7 +17,7 @@ from app.jobs.notifications import (
     send_with_image_preview,
 )
 from app.sfl_client import AuthExpiredError
-from app.sync import sync_results
+from app.sync import sync_auctions, sync_results
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,42 @@ async def cmd_status(message: Message, scheduler: AsyncIOScheduler, config: Conf
     )
 
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("update_auctions"))
+async def cmd_update_auctions(
+    message: Message,
+    bot: Bot,
+    db_pool: Pool,
+    scheduler: AsyncIOScheduler,
+    config: Config,
+) -> None:
+    if not _is_admin(message, config):
+        return
+
+    await message.answer("🔄 Обновляю список аукционов...")
+
+    try:
+        affected = await sync_auctions(db_pool, config.sfl_api_key)
+    except AuthExpiredError:
+        await message.answer(
+            "❌ Ключ SFL_API_KEY отклонён (401) — нужно проверить/обновить SFL_API_KEY."
+        )
+        await send_admin_alert(
+            bot,
+            config.admin_ids,
+            "❌ Ключ SFL_API_KEY отклонён (401) — нужно проверить/обновить SFL_API_KEY.",
+        )
+        return
+
+    await schedule_all_pending(bot, db_pool, scheduler, config)
+
+    summary = get_scheduler_summary(scheduler)
+    await message.answer(
+        "✅ Обновление завершено.\n"
+        f"Обработано аукционов: {affected}\n"
+        f"Всего job'ов в шедулере: {summary['total']}"
+    )
 
 
 @router.message(Command("backfill_results"))

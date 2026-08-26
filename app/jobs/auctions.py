@@ -14,13 +14,33 @@ from app.jobs.notifications import (
     send_started,
 )
 from app.sfl_client import AuthExpiredError
-from app.sync import sync_results
+from app.sync import sync_auctions, sync_results
 
 logger = logging.getLogger(__name__)
 
 # Community API rate limit is ~1 request/5s per IP (doubling to 10s if hammered),
 # so retries stay just above that floor instead of the old conservative backoff.
 RESULTS_RETRY_DELAYS_SECONDS = [5, 10, 15, 30]
+
+
+async def refresh_auctions_job(
+    bot: Bot, pool: Pool, scheduler: AsyncIOScheduler, config: Config
+) -> None:
+    logger.info("Running refresh_auctions_job")
+    try:
+        await sync_auctions(pool, config.sfl_api_key)
+    except AuthExpiredError:
+        await send_admin_alert(
+            bot,
+            config.admin_ids,
+            "❌ Ключ SFL_API_KEY отклонён (401) — нужно проверить/обновить SFL_API_KEY.",
+        )
+        return
+
+    try:
+        await schedule_all_pending(bot, pool, scheduler, config)
+    except Exception:
+        logger.exception("schedule_all_pending failed")
 
 
 async def schedule_all_pending(

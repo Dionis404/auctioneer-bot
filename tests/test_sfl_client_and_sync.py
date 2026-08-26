@@ -63,6 +63,37 @@ PENDING_RESPONSE = {
     }
 }
 
+AUCTIONS_LIST_RESPONSE = {
+    "data": {
+        "auctions": [
+            {
+                "auctionId": "coin-aura-2024-08-07-drop-1",
+                "type": "wearable",
+                "wearable": "Coin Aura",
+                "startAt": 1_723_017_600_000,
+                "endAt": 1_723_021_200_000,
+                "supply": 1,
+                "sfl": 1,
+                "ingredients": {},
+                "chapterLimit": 1,
+            },
+            {
+                "auctionId": "pet-2025-10-08-drop-1",
+                "type": "nft",
+                "nft": "Pet",
+                "startId": 2,
+                "startAt": 1_759_895_880_000,
+                "endAt": 1_759_899_480_000,
+                "supply": 10,
+                "sfl": 1,
+                "ingredients": {"Gold": 5},
+                "chapterLimit": 7,
+            },
+        ],
+        "totalSupply": {"Coin Aura": 100, "Rocket Onesie": 250},
+    }
+}
+
 
 class FakeConnection:
     def __init__(self):
@@ -203,6 +234,66 @@ async def test_sync_results_returns_false_on_404():
 
     assert ok is False
     assert conn.executed == []
+
+
+@respx.mock
+async def test_fetch_auctions_sends_x_api_key_header_and_query_param():
+    route = respx.get("https://api.sunflower-land.com/community/data").mock(
+        return_value=Response(200, json=AUCTIONS_LIST_RESPONSE)
+    )
+
+    result = await sfl_client.fetch_auctions("my-key")
+
+    assert route.called
+    request = route.calls[0].request
+    assert request.headers["x-api-key"] == "my-key"
+    assert request.url.params["type"] == "auctions"
+    assert result == AUCTIONS_LIST_RESPONSE["data"]
+
+
+@respx.mock
+async def test_fetch_auctions_raises_auth_expired_on_401():
+    respx.get("https://api.sunflower-land.com/community/data").mock(
+        return_value=Response(401, json={"error": "invalid key"})
+    )
+
+    with pytest.raises(sfl_client.AuthExpiredError):
+        await sfl_client.fetch_auctions("bad-key")
+
+
+@respx.mock
+async def test_sync_auctions_maps_wearable_and_nft_fields():
+    respx.get("https://api.sunflower-land.com/community/data").mock(
+        return_value=Response(200, json=AUCTIONS_LIST_RESPONSE)
+    )
+
+    conn = FakeConnection()
+    pool = FakePool(conn)
+
+    affected = await sync.sync_auctions(pool, api_key="key")
+
+    assert affected == 2
+
+    auction_calls = [c for c in conn.executed if "INSERT INTO auctions" in c[0]]
+    assert len(auction_calls) == 2
+
+    wearable_args = auction_calls[0][1]
+    assert wearable_args[0] == "coin-aura-2024-08-07-drop-1"
+    assert wearable_args[1] == "Coin Aura"
+    assert wearable_args[2] == "wearable"
+    assert wearable_args[3] == 1
+    assert wearable_args[4] == 1
+    assert wearable_args[9] is None  # startId absent for wearables
+
+    nft_args = auction_calls[1][1]
+    assert nft_args[0] == "pet-2025-10-08-drop-1"
+    assert nft_args[1] == "Pet"
+    assert nft_args[2] == "nft"
+    assert nft_args[5] == {"Gold": 5}
+    assert nft_args[9] == 2
+
+    supply_calls = [c for c in conn.executed if "item_total_supply" in c[0]]
+    assert len(supply_calls) == 2
 
 
 def test_format_top_and_last_with_missing_farm_in_leaderboard():

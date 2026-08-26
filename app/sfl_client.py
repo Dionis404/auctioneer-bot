@@ -36,6 +36,28 @@ def _get_client() -> httpx.AsyncClient:
     return _client if _client is not None else init_client()
 
 
+async def fetch_auctions(api_key: str | None) -> dict:
+    client = _get_client()
+    response = await client.get(
+        "/community/data",
+        params={"type": "auctions"},
+        headers=_headers(api_key),
+    )
+
+    if response.status_code == 401:
+        raise AuthExpiredError("SFL API key rejected (401) for auctions")
+
+    if response.status_code != 200:
+        logger.error(
+            "fetch_auctions failed: status=%s body=%s",
+            response.status_code,
+            response.text,
+        )
+        response.raise_for_status()
+
+    return response.json().get("data", {})
+
+
 async def fetch_auction_results(auction_id: str, api_key: str | None) -> dict | None:
     client = _get_client()
     response = await client.get(

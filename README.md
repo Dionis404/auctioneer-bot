@@ -6,11 +6,10 @@ Sunflower Land по данным, уже накопленным в базе: н�
 APScheduler для планирования уведомлений и asyncpg для доступа к
 PostgreSQL.
 
-Результаты аукционов запрашиваются через официальный Community API
-(`GET /community/data?type=auctionResults`, авторизация — `x-api-key`).
-Список самих аукционов по-прежнему не подтягивается по API — планирование
-reminder/started работает только по аукционам, уже записанным в таблицу
-`auctions`.
+Список аукционов и их результаты запрашиваются через официальный
+Community API (`GET /community/data?type=auctions` и
+`?type=auctionResults`, авторизация — `x-api-key`). Список обновляется
+раз в неделю фоновой задачей и вручную через `/update_auctions`.
 
 ## Стек
 
@@ -28,10 +27,10 @@ reminder/started работает только по аукционам, уже �
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота (от [@BotFather](https://t.me/BotFather)) |
 | `DATABASE_URL` | Строка подключения к PostgreSQL, например `postgresql://user:password@host:5432/auctioneer` |
-| `SFL_API_KEY` | Официальный API-ключ Sunflower Land (Settings → Developer Options → API Key в игре) для запроса результатов аукционов |
+| `SFL_API_KEY` | Официальный API-ключ Sunflower Land (Settings → Developer Options → API Key в игре) для запроса списка аукционов и их результатов |
 | `ALERT_CHAT_ID` | Чат для `/next_auction` |
 | `NOTIFY_CHAT_ID` | Чат, куда шлются уведомления об аукционах (напоминания, старт, результаты) |
-| `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/next_auction`, `/test_notification`, а также технические алерты об ошибках API в личку |
+| `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/update_auctions`, `/next_auction`, `/backfill_results`, `/test_notification`, а также технические алерты об ошибках API в личку |
 | `SITE_IMAGE_BASE_URL` | База для картинок предметов, по умолчанию `https://goblincodex.fun/sprites/` |
 
 ## Локальный запуск
@@ -52,14 +51,15 @@ reminder/started работает только по аукционам, уже �
    python -m app.main
    ```
 
-При старте бот сам применяет миграции из `migrations/` и сразу вызывает
-`schedule_all_pending`, чтобы восстановить расписание уведомлений по
-аукционам, уже находящимся в БД.
+При старте бот сам применяет миграции из `migrations/` и сразу запускает
+`refresh_auctions_job`, чтобы подтянуть текущие аукционы и восстановить
+расписание уведомлений.
 
 ## Команды бота
 
 - `/ping` — проверка живости.
 - `/status` — сводка по job'ам в шедулере (доступно админам).
+- `/update_auctions` — вручную обновить список аукционов и пересобрать расписание (админам).
 - `/next_auction` — отправить в `ALERT_CHAT_ID` информацию о ближайшем предстоящем аукционе (админам).
 - `/backfill_results` — вручную дозагрузить результаты завершённых аукционов, у которых их ещё нет (админам).
 - `/test_notification [reminder|started]` — отправить тестовое уведомление в `NOTIFY_CHAT_ID` для проверки формата (админам).

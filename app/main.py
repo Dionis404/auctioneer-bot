@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -10,7 +11,7 @@ from app.config import load_config
 from app.db import create_pool, run_migrations
 from app.handlers import commands, fallback
 from app.image_compose import close_client as close_image_client
-from app.jobs.auctions import schedule_all_pending
+from app.jobs.auctions import refresh_auctions_job
 from app.sfl_client import close_client as close_sfl_client
 from app.sfl_client import init_client as init_sfl_client
 
@@ -45,9 +46,17 @@ async def main() -> None:
     scheduler = AsyncIOScheduler()
     dispatcher["scheduler"] = scheduler
 
-    scheduler.start()
+    scheduler.add_job(
+        refresh_auctions_job,
+        trigger="interval",
+        weeks=1,
+        id="refresh_auctions_job",
+        replace_existing=True,
+        args=(bot, pool, scheduler, config),
+        next_run_time=datetime.now(timezone.utc),
+    )
 
-    await schedule_all_pending(bot, pool, scheduler, config)
+    scheduler.start()
 
     try:
         logger.info("Starting bot polling")
