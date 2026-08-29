@@ -18,6 +18,7 @@ from app.jobs.notifications import (
     send_admin_alert,
     send_with_image_preview,
 )
+from app.llm_flavor import generate_flavor_line
 from app.sfl_client import AuthExpiredError
 from app.sync import sync_auctions, sync_results
 
@@ -217,6 +218,12 @@ async def cmd_next_auction(
         supply=row["supply"],
         start_at=format_msk_time(row["start_at"]),
     )
+
+    flavor_line = await generate_flavor_line(
+        config.routerai_api_key, f"Ближайший аукцион на {item_name}."
+    )
+    if flavor_line:
+        caption += f"\n\n<i>{flavor_line}</i>"
 
     image_url = await get_item_image(db_pool, item_name, item_type)
     chat_id = message.chat.id

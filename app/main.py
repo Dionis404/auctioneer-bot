@@ -12,6 +12,7 @@ from app.db import create_pool, run_migrations
 from app.handlers import commands, fallback
 from app.image_compose import close_client as close_image_client
 from app.jobs.auctions import refresh_auctions_job
+from app.llm_flavor import close_client as close_llm_client
 from app.sfl_client import close_client as close_sfl_client
 from app.sfl_client import init_client as init_sfl_client
 
@@ -65,6 +66,7 @@ async def main() -> None:
         scheduler.shutdown(wait=False)
         await close_image_client()
         await close_sfl_client()
+        await close_llm_client()
         await pool.close()
         await bot.session.close()
 

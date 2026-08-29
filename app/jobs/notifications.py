@@ -11,6 +11,7 @@ from asyncpg import Pool
 
 from app.image_compose import render_item_on_background
 from app.images import get_item_image
+from app.llm_flavor import generate_flavor_line
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,16 @@ def format_top_and_last(leaderboard: list[dict]) -> str:
     return "\n".join(lines) if lines else "нет данных"
 
 
-async def send_reminder(bot: Bot, pool: Pool, auction_id: str) -> None:
+async def _with_flavor(text: str, api_key: str | None, context: str) -> str:
+    line = await generate_flavor_line(api_key, context)
+    if not line:
+        return text
+    return f"{text}\n\n<i>{line}</i>"
+
+
+async def send_reminder(
+    bot: Bot, pool: Pool, auction_id: str, routerai_api_key: str | None = None
+) -> None:
     notify_chat_id = _notify_chat_id()
     if notify_chat_id is None:
         logger.warning(
@@ -132,6 +142,9 @@ async def send_reminder(bot: Bot, pool: Pool, auction_id: str) -> None:
         f"🎟 Лотов: {row['supply']}\n\n"
         f"🕑 Начало: {format_msk_time(row['start_at'])}"
     )
+    text = await _with_flavor(
+        text, routerai_api_key, f"Через час стартует аукцион на {item_name}."
+    )
 
     image_url = await get_item_image(pool, item_name, item_type)
     message = await send_with_image_preview(bot, notify_chat_id, text, image_url, auction_id)
@@ -148,7 +161,9 @@ async def send_reminder(bot: Bot, pool: Pool, auction_id: str) -> None:
     )
 
 
-async def send_started(bot: Bot, pool: Pool, auction_id: str) -> None:
+async def send_started(
+    bot: Bot, pool: Pool, auction_id: str, routerai_api_key: str | None = None
+) -> None:
     notify_chat_id = _notify_chat_id()
     if notify_chat_id is None:
         logger.warning(
@@ -173,6 +188,9 @@ async def send_started(bot: Bot, pool: Pool, auction_id: str) -> None:
         f"{DIVIDER}\n"
         f"Аукцион стартовал! Успей сделать ставку."
     )
+    text = await _with_flavor(
+        text, routerai_api_key, f"Аукцион на {item_name} только что стартовал."
+    )
 
     image_url = await get_item_image(pool, item_name, item_type)
     message = await send_with_image_preview(bot, notify_chat_id, text, image_url, auction_id)
@@ -189,7 +207,9 @@ async def send_started(bot: Bot, pool: Pool, auction_id: str) -> None:
     )
 
 
-async def send_results_notification(bot: Bot, pool: Pool, auction_id: str) -> None:
+async def send_results_notification(
+    bot: Bot, pool: Pool, auction_id: str, routerai_api_key: str | None = None
+) -> None:
     notify_chat_id = _notify_chat_id()
     if notify_chat_id is None:
         logger.warning(
@@ -220,6 +240,9 @@ async def send_results_notification(bot: Bot, pool: Pool, auction_id: str) -> No
         f"Аукцион завершён!\n\n"
         f"👥 Участников: {row['participant_count']}\n\n"
         f"🏆 Топ-3 и последнее место:\n{format_top_and_last(row['leaderboard'])}"
+    )
+    text = await _with_flavor(
+        text, routerai_api_key, f"Аукцион на {item_name} завершился."
     )
 
     image_url = await get_item_image(pool, item_name, item_type)

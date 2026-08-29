@@ -132,7 +132,7 @@ async def test_fetch_and_send_results_calls_notification_on_success(scheduler, m
         bot, pool, "auction-x", scheduler, config, attempt=0
     )
 
-    send_results_mock.assert_awaited_once_with(bot, pool, "auction-x")
+    send_results_mock.assert_awaited_once_with(bot, pool, "auction-x", config.routerai_api_key)
     assert scheduler.get_jobs() == []
 
 

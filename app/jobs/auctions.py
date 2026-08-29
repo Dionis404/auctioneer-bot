@@ -69,7 +69,7 @@ async def schedule_all_pending(
             run_date=start_at - timedelta(hours=1),
             now=now,
             func=send_reminder,
-            args=(bot, pool, auction_id),
+            args=(bot, pool, auction_id, config.routerai_api_key),
         ):
             scheduled_count += 1
 
@@ -89,7 +89,7 @@ async def schedule_all_pending(
             run_date=start_at,
             now=now,
             func=send_started,
-            args=(bot, pool, auction_id),
+            args=(bot, pool, auction_id, config.routerai_api_key),
         ):
             scheduled_count += 1
 
@@ -162,7 +162,7 @@ async def fetch_and_send_results(
         return
 
     if success:
-        await send_results_notification(bot, pool, auction_id)
+        await send_results_notification(bot, pool, auction_id, config.routerai_api_key)
         return
 
     if attempt >= len(RESULTS_RETRY_DELAYS_SECONDS):

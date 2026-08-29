@@ -28,6 +28,7 @@ Community API (`GET /community/data?type=auctions` и
 | `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота (от [@BotFather](https://t.me/BotFather)) |
 | `DATABASE_URL` | Строка подключения к PostgreSQL, например `postgresql://user:password@host:5432/auctioneer` |
 | `SFL_API_KEY` | Официальный API-ключ Sunflower Land (Settings → Developer Options → API Key в игре) для запроса списка аукционов и их результатов |
+| `ROUTERAI_API_KEY` | Ключ [RouterAI](https://routerai.ru) для генерации живой фразы-комментария в уведомлениях (модель `google/gemini-2.5-flash-lite`). Необязателен — без него уведомления шлются обычным шаблонным текстом |
 | `ALERT_CHAT_ID` | Чат для `/next_auction` |
 | `NOTIFY_CHAT_ID` | Чат, куда шлются уведомления об аукционах (напоминания, старт, результаты) |
 | `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/update_auctions`, `/next_auction`, `/backfill_results`, `/test_notification`, а также технические алерты об ошибках API в личку |

@@ -132,6 +132,64 @@ async def test_send_reminder_sfl_flag_true(monkeypatch):
     assert "Ставка: Flower" in text
 
 
+async def test_send_reminder_appends_flavor_line_when_available(monkeypatch):
+    _patch_notify_chat_id(monkeypatch, 555)
+
+    async def fake_flavor(api_key, context):
+        assert api_key == "router-key"
+        return "Азарт зашкаливает!"
+
+    monkeypatch.setattr(
+        "app.jobs.notifications.generate_flavor_line", fake_flavor
+    )
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 444
+    row = {
+        "item_name": "Goblin Mask",
+        "item_type": "wearable",
+        "supply": 200,
+        "sfl_price": 1,
+        "ingredients": None,
+        "start_at": datetime.now(timezone.utc) + timedelta(hours=1),
+    }
+    pool = FakeAuctionPool(row)
+
+    await send_reminder(bot, pool, "auction-1", routerai_api_key="router-key")
+
+    text = bot.send_photo.await_args.kwargs["caption"]
+    assert "Азарт зашкаливает!" in text
+
+
+async def test_send_reminder_falls_back_to_plain_text_when_flavor_unavailable(monkeypatch):
+    _patch_notify_chat_id(monkeypatch, 555)
+
+    async def fake_flavor(api_key, context):
+        return None
+
+    monkeypatch.setattr(
+        "app.jobs.notifications.generate_flavor_line", fake_flavor
+    )
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 445
+    row = {
+        "item_name": "Goblin Mask",
+        "item_type": "wearable",
+        "supply": 200,
+        "sfl_price": 1,
+        "ingredients": None,
+        "start_at": datetime.now(timezone.utc) + timedelta(hours=1),
+    }
+    pool = FakeAuctionPool(row)
+
+    await send_reminder(bot, pool, "auction-1", routerai_api_key="router-key")
+
+    text = bot.send_photo.await_args.kwargs["caption"]
+    assert "Goblin Mask" in text
+    assert "<i>" not in text
+
+
 async def test_send_reminder_noop_without_notify_chat_id(monkeypatch):
     _patch_notify_chat_id(monkeypatch, None)
 
