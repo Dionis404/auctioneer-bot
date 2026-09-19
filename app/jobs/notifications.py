@@ -20,8 +20,6 @@ MSK_TZ = ZoneInfo("Europe/Moscow")
 
 CAPTION_LIMIT = 1024
 
-DIVIDER = "─" * 16
-
 
 async def send_with_image_preview(
     bot: Bot, chat_id: int, text: str, image_url: str, background_key: str
@@ -142,8 +140,7 @@ async def send_reminder(
     item_type = row["item_type"]
 
     text = (
-        f"⏰ <b>{item_name}</b> ({item_type})\n"
-        f"{DIVIDER}\n"
+        f"⏰ <b>{item_name}</b> ({item_type})\n\n"
         f"Через час старт аукциона!\n\n"
         f"💰 {format_bid(row['sfl_price'], row['ingredients'])}\n"
         f"🎟 Лотов: {row['supply']}\n\n"
@@ -191,8 +188,7 @@ async def send_started(
     item_type = row["item_type"]
 
     text = (
-        f"🔨 <b>{item_name}</b>\n"
-        f"{DIVIDER}\n"
+        f"🔨 <b>{item_name}</b>\n\n"
         f"Аукцион стартовал! Успей сделать ставку."
     )
     text = await _with_flavor(
@@ -242,10 +238,9 @@ async def send_results_notification(
     item_type = row["item_type"]
 
     text = (
-        f"🏁 <b>{item_name}</b>\n"
-        f"{format_item_hashtag(item_name)}\n"
-        f"{DIVIDER}\n"
-        f"Аукцион завершён!\n\n"
+        f"🔨 <b>Удар молотка! Лот ушёл с торгов</b>\n"
+        f"{format_item_hashtag(item_name)}\n\n"
+        f"<b>{item_name}</b>\n\n"
         f"👥 Участников: {row['participant_count']}\n\n"
         f"🏆 Топ-3 и последнее место:\n{format_top_and_last(row['leaderboard'])}"
     )

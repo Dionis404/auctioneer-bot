@@ -12,7 +12,6 @@ from app.config import Config
 from app.images import get_item_image
 from app.jobs.auctions import schedule_all_pending
 from app.jobs.notifications import (
-    DIVIDER,
     format_bid,
     format_msk_time,
     send_admin_alert,
@@ -205,15 +204,13 @@ async def cmd_next_auction(
 
     caption = (
         "Ближайший аукцион\n\n"
-        "⏰ <b>{item_name}</b> ({item_type})\n"
-        "{divider}\n"
+        "⏰ <b>{item_name}</b> ({item_type})\n\n"
         "💰 {bid}\n"
         "🎟 Лотов: {supply}\n\n"
         "🕑 Начало: {start_at}"
     ).format(
         item_name=item_name,
         item_type=item_type,
-        divider=DIVIDER,
         bid=format_bid(row["sfl_price"], row["ingredients"]),
         supply=row["supply"],
         start_at=format_msk_time(row["start_at"]),
@@ -278,8 +275,7 @@ async def cmd_test_notification(
     if notification_type == "reminder":
         start_at = datetime.now(timezone.utc) + timedelta(hours=1)
         caption = (
-            f"⏰ <b>{item_name}</b> ({item_type})\n"
-            f"{DIVIDER}\n"
+            f"⏰ <b>{item_name}</b> ({item_type})\n\n"
             f"Через час старт аукциона!\n\n"
             f"💰 {format_bid(1, None)}\n"
             f"🎟 Лотов: 50\n\n"
@@ -287,8 +283,7 @@ async def cmd_test_notification(
         )
     else:
         caption = (
-            f"🔨 <b>{item_name}</b>\n"
-            f"{DIVIDER}\n"
+            f"🔨 <b>{item_name}</b>\n\n"
             f"Аукцион стартовал! Успей сделать ставку."
         )
 
