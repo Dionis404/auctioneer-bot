@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -53,6 +54,12 @@ def _notify_chat_id() -> int | None:
 
 def format_msk_time(dt: datetime) -> str:
     return dt.astimezone(MSK_TZ).strftime("%d.%m %H:%M МСК")
+
+
+def format_item_hashtag(item_name: str) -> str:
+    """Turn an item name into a Telegram hashtag, e.g. "Rice Shirt" -> "#RiceShirt"."""
+    words = re.findall(r"[\wа-яА-ЯёЁ]+", item_name)
+    return "#" + "".join(word.capitalize() for word in words)
 
 
 def _coerce_jsonb(value):
@@ -236,6 +243,7 @@ async def send_results_notification(
 
     text = (
         f"🏁 <b>{item_name}</b>\n"
+        f"{format_item_hashtag(item_name)}\n"
         f"{DIVIDER}\n"
         f"Аукцион завершён!\n\n"
         f"👥 Участников: {row['participant_count']}\n\n"

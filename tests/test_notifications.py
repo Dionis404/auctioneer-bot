@@ -8,6 +8,7 @@ from aiogram.types import BufferedInputFile
 from app.jobs.notifications import (
     delete_notification,
     format_bid,
+    format_item_hashtag,
     format_msk_time,
     send_admin_alert,
     send_reminder,
@@ -52,6 +53,18 @@ def test_format_bid_parses_double_encoded_json_string():
     ingredients_str = json.dumps({"Gem": 1, "Wood": 0})
 
     assert format_bid(0, ingredients_str) == "Ставка: Gem"
+
+
+def test_format_item_hashtag_strips_spaces():
+    assert format_item_hashtag("Rice Shirt") == "#RiceShirt"
+
+
+def test_format_item_hashtag_single_word():
+    assert format_item_hashtag("Floater") == "#Floater"
+
+
+def test_format_item_hashtag_strips_punctuation():
+    assert format_item_hashtag("Genie's Lamp!") == "#GenieSLamp"
 
 
 class FakeAuctionPool:
@@ -263,6 +276,7 @@ async def test_send_results_notification_shows_top_and_last(monkeypatch):
     assert "Amadeus444" in text
     assert "Статус" not in text
     assert "Победа" not in text
+    assert "#GenieLamp" in text
 
     insert_calls = [c for c in pool.executed if "results" in c[0]]
     assert len(insert_calls) == 1
