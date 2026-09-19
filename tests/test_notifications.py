@@ -277,10 +277,18 @@ async def test_send_results_notification_shows_top_and_last(monkeypatch):
     assert "Статус" not in text
     assert "Победа" not in text
     assert "#GenieLamp" in text
+    assert text.strip().endswith("#GenieLamp")
 
     insert_calls = [c for c in pool.executed if "results" in c[0]]
     assert len(insert_calls) == 1
     assert insert_calls[0][1] == ("auction-1", 555, 777)
+
+
+def test_random_results_headline_picks_from_list():
+    from app.jobs.notifications import RESULTS_HEADLINES, random_results_headline
+
+    for _ in range(20):
+        assert random_results_headline() in RESULTS_HEADLINES
 
 
 async def test_send_results_notification_noop_without_notify_chat_id(monkeypatch):

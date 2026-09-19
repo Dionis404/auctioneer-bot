@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -58,6 +59,20 @@ def format_item_hashtag(item_name: str) -> str:
     """Turn an item name into a Telegram hashtag, e.g. "Rice Shirt" -> "#RiceShirt"."""
     words = re.findall(r"[\wа-яА-ЯёЁ]+", item_name)
     return "#" + "".join(word.capitalize() for word in words)
+
+
+RESULTS_HEADLINES = [
+    "🔨 Удар молотка! Лот ушёл с торгов",
+    "🔨 Готово! Молоток опустился в последний раз",
+    "🏆 Торги завершены — победитель определён",
+    "🎉 Аукцион закрыт, лот нашёл нового хозяина",
+    "🔔 Финальный удар молотка — сделка заключена",
+    "✨ Ставки сделаны, аукцион завершён",
+]
+
+
+def random_results_headline() -> str:
+    return random.choice(RESULTS_HEADLINES)
 
 
 def _coerce_jsonb(value):
@@ -238,8 +253,7 @@ async def send_results_notification(
     item_type = row["item_type"]
 
     text = (
-        f"🔨 <b>Удар молотка! Лот ушёл с торгов</b>\n"
-        f"{format_item_hashtag(item_name)}\n\n"
+        f"{random_results_headline()}\n\n"
         f"<b>{item_name}</b>\n\n"
         f"👥 Участников: {row['participant_count']}\n\n"
         f"🏆 Топ-3 и последнее место:\n{format_top_and_last(row['leaderboard'])}"
@@ -247,6 +261,7 @@ async def send_results_notification(
     text = await _with_flavor(
         text, routerai_api_key, f"Аукцион на {item_name} завершился."
     )
+    text += f"\n\n{format_item_hashtag(item_name)}"
 
     image_url = await get_item_image(pool, item_name, item_type)
     message = await send_with_image_preview(bot, notify_chat_id, text, image_url, auction_id)
