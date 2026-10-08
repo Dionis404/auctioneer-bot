@@ -263,7 +263,7 @@ async def send_results_notification(
         f"{random_results_headline()}\n\n"
         f"<b>{item_name}</b>\n\n"
         f"👥 Участников: {row['participant_count']}\n\n"
-        f"🏆 Топ-3 и последнее место:\n{format_top_and_last(row['leaderboard'])}"
+        f"🏆 Результаты:\n{format_top_and_last(row['leaderboard'])}"
     )
     text = await _with_flavor(
         text, routerai_api_key, f"Аукцион на {item_name} завершился."
