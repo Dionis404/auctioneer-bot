@@ -40,3 +40,19 @@ async def test_get_item_image_falls_back_when_sprite_empty():
 
 def test_all_default_images_use_local_fallback_sprite():
     assert all(value == LOCAL_FALLBACK_SPRITE for value in DEFAULT_IMAGES.values())
+
+
+async def test_pet_nft_uses_egg_sprite_override_without_db_lookup():
+    pool = FakePool(None)  # sfl_items has no "Pet"/nft row — override must win
+
+    url = await get_item_image(pool, "Pet", "nft")
+
+    assert url == f"{SITE_IMAGE_BASE_URL}icons/pet_egg.png"
+
+
+async def test_override_does_not_apply_to_unrelated_nft():
+    pool = FakePool(None)
+
+    url = await get_item_image(pool, "Genie Lamp", "nft")
+
+    assert url == DEFAULT_IMAGES["nft"]
