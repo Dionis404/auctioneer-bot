@@ -127,7 +127,7 @@ async def test_reminder_falls_back_to_default_image_when_sprite_missing(
     await cmd_test_notification(message, command, bot, pool, config)
 
     assert _mock_background_compose == [
-        ("https://goblincodex.fun/sprites/sfts/alba.webp", "Genie Lamp")
+        ("local:fallback.png", "Genie Lamp")
     ]
 
 

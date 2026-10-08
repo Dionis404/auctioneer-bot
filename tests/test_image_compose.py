@@ -1,18 +1,42 @@
+import pytest
 from PIL import Image
 
 from app.image_compose import (
+    ASSETS_DIR,
     BACKGROUND_FILES,
+    LOCAL_SPRITE_PREFIX,
     SAFE_BOX,
+    _download_sprite,
     _fit_sprite,
     _load_backgrounds,
     compose,
     pick_background_index,
+    render_item_on_background,
 )
 
 
 def test_background_files_exist():
     for path in BACKGROUND_FILES:
         assert path.exists(), f"missing background file: {path}"
+
+
+def test_fallback_sprite_file_exists():
+    assert (ASSETS_DIR / "fallback.png").exists()
+
+
+@pytest.mark.asyncio
+async def test_download_sprite_loads_local_file_for_local_prefix():
+    sprite = await _download_sprite(f"{LOCAL_SPRITE_PREFIX}fallback.png")
+    assert sprite.mode == "RGBA"
+
+
+@pytest.mark.asyncio
+async def test_render_item_on_background_works_with_local_sprite():
+    png_bytes = await render_item_on_background(
+        f"{LOCAL_SPRITE_PREFIX}fallback.png", "auction-1"
+    )
+    assert isinstance(png_bytes, bytes)
+    assert png_bytes[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_backgrounds_load_as_rgba_512_tall():

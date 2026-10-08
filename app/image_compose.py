@@ -7,13 +7,16 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-BACKGROUNDS_DIR = Path(__file__).resolve().parent / "assets" / "backgrounds"
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+BACKGROUNDS_DIR = ASSETS_DIR / "backgrounds"
 BACKGROUND_FILES = [
     BACKGROUNDS_DIR / "bg_1.png",
     BACKGROUNDS_DIR / "bg_2.png",
     BACKGROUNDS_DIR / "bg_3.png",
     BACKGROUNDS_DIR / "bg_4.png",
 ]
+
+LOCAL_SPRITE_PREFIX = "local:"
 
 # Safe inner area shared by all four backgrounds (beige panel, clear of frame
 # decorations), with a small inward margin so the sprite never touches it.
@@ -63,7 +66,15 @@ def pick_background_index(auction_id: str) -> int:
     return hash(auction_id) % len(BACKGROUND_FILES)
 
 
+def _load_local_sprite(image_url: str) -> Image.Image:
+    filename = image_url[len(LOCAL_SPRITE_PREFIX):]
+    return Image.open(ASSETS_DIR / filename).convert("RGBA")
+
+
 async def _download_sprite(image_url: str) -> Image.Image:
+    if image_url.startswith(LOCAL_SPRITE_PREFIX):
+        return _load_local_sprite(image_url)
+
     client = _get_client()
     response = await client.get(image_url)
     response.raise_for_status()

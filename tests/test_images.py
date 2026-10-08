@@ -1,4 +1,9 @@
-from app.images import DEFAULT_IMAGES, SITE_IMAGE_BASE_URL, get_item_image
+from app.images import (
+    DEFAULT_IMAGES,
+    LOCAL_FALLBACK_SPRITE,
+    SITE_IMAGE_BASE_URL,
+    get_item_image,
+)
 
 
 class FakePool:
@@ -31,3 +36,7 @@ async def test_get_item_image_falls_back_when_sprite_empty():
     url = await get_item_image(pool, "Something", "collectible")
 
     assert url == DEFAULT_IMAGES["collectible"]
+
+
+def test_all_default_images_use_local_fallback_sprite():
+    assert all(value == LOCAL_FALLBACK_SPRITE for value in DEFAULT_IMAGES.values())

@@ -6,6 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile
 
 from app.jobs.notifications import (
+    _as_photo_input,
     delete_notification,
     format_bid,
     format_item_hashtag,
@@ -25,6 +26,15 @@ def _mock_background_compose(monkeypatch):
     monkeypatch.setattr(
         "app.jobs.notifications.render_item_on_background", fake_render
     )
+
+
+def test_as_photo_input_passes_through_http_url():
+    assert _as_photo_input("https://example.com/sprite.png") == "https://example.com/sprite.png"
+
+
+def test_as_photo_input_loads_local_sprite_as_buffered_file():
+    result = _as_photo_input("local:fallback.png")
+    assert isinstance(result, BufferedInputFile)
 
 
 def test_format_msk_time_converts_utc_to_moscow():

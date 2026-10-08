@@ -11,7 +11,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, Message
 from asyncpg import Pool
 
-from app.image_compose import render_item_on_background
+from app.image_compose import ASSETS_DIR, LOCAL_SPRITE_PREFIX, render_item_on_background
 from app.images import get_item_image
 from app.llm_flavor import generate_flavor_line
 
@@ -22,10 +22,17 @@ MSK_TZ = ZoneInfo("Europe/Moscow")
 CAPTION_LIMIT = 1024
 
 
+def _as_photo_input(image_url: str) -> str | BufferedInputFile:
+    if image_url.startswith(LOCAL_SPRITE_PREFIX):
+        filename = image_url[len(LOCAL_SPRITE_PREFIX):]
+        return BufferedInputFile.from_file(str(ASSETS_DIR / filename))
+    return image_url
+
+
 async def send_with_image_preview(
     bot: Bot, chat_id: int, text: str, image_url: str, background_key: str
 ) -> Message:
-    photo: str | BufferedInputFile = image_url
+    photo: str | BufferedInputFile = _as_photo_input(image_url)
     try:
         composed = await render_item_on_background(image_url, background_key)
         photo = BufferedInputFile(composed, filename="auction.png")
