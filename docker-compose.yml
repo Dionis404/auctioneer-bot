@@ -1,0 +1,22 @@
+services:
+  auctioneer-bot:
+    build: .
+    container_name: auctioneer-bot
+    restart: unless-stopped
+    mem_limit: 512m
+    networks:
+      - shared-net
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DATABASE_URL: ${DATABASE_URL}
+      SFL_API_KEY: ${SFL_API_KEY}
+      ROUTERAI_API_KEY: ${ROUTERAI_API_KEY}
+      ALERT_CHAT_ID: ${ALERT_CHAT_ID}
+      NOTIFY_CHAT_ID: ${NOTIFY_CHAT_ID}
+      ADMIN_IDS: ${ADMIN_IDS}
+      SITE_IMAGE_BASE_URL: ${SITE_IMAGE_BASE_URL:-https://goblincodex.fun/sprites/}
+      TZ: Europe/Moscow
+
+networks:
+  shared-net:
+    external: true
