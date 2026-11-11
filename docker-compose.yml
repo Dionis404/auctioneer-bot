@@ -16,6 +16,7 @@ services:
       ADMIN_IDS: ${ADMIN_IDS}
       SITE_IMAGE_BASE_URL: ${SITE_IMAGE_BASE_URL:-https://goblincodex.fun/sprites/}
       TZ: Europe/Moscow
+      TELEGRAM_API_BASE: ${TELEGRAM_API_BASE}
 
 networks:
   shared-net:
