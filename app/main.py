@@ -1,8 +1,11 @@
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -32,8 +35,15 @@ async def main() -> None:
 
     init_sfl_client()
 
+    api_base = os.getenv("TELEGRAM_API_BASE")
+    session = (
+        AiohttpSession(api=TelegramAPIServer.from_base(api_base))
+        if api_base
+        else AiohttpSession()
+    )
     bot = Bot(
         token=config.telegram_bot_token,
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dispatcher = Dispatcher()
