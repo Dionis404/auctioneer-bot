@@ -16,8 +16,6 @@ from app.handlers import commands, fallback
 from app.image_compose import close_client as close_image_client
 from app.jobs.auctions import refresh_auctions_job
 from app.llm_flavor import close_client as close_llm_client
-from app.sfl_client import close_client as close_sfl_client
-from app.sfl_client import init_client as init_sfl_client
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,8 +30,6 @@ async def main() -> None:
 
     pool = await create_pool(config.database_url)
     await run_migrations(pool)
-
-    init_sfl_client()
 
     api_base = os.getenv("TELEGRAM_API_BASE")
     session = (
@@ -57,10 +53,12 @@ async def main() -> None:
     scheduler = AsyncIOScheduler()
     dispatcher["scheduler"] = scheduler
 
+    # Список аукционов и результаты собирает sfl-collector; бот раз в час
+    # перечитывает БД и перепланирует уведомления (подхват новых аукционов).
     scheduler.add_job(
         refresh_auctions_job,
         trigger="interval",
-        weeks=1,
+        hours=1,
         id="refresh_auctions_job",
         replace_existing=True,
         args=(bot, pool, scheduler, config),
@@ -75,7 +73,6 @@ async def main() -> None:
     finally:
         scheduler.shutdown(wait=False)
         await close_image_client()
-        await close_sfl_client()
         await close_llm_client()
         await pool.close()
         await bot.session.close()

@@ -1,16 +1,13 @@
 from unittest.mock import AsyncMock, MagicMock
 
 from app.config import Config
-from app.handlers import commands as commands_module
 from app.handlers.commands import cmd_backfill_results
-from app.sfl_client import AuthExpiredError
 
 
 def _make_config(**overrides) -> Config:
     base = dict(
         telegram_bot_token="t",
         database_url="postgresql://x",
-        sfl_api_key="key",
         alert_chat_id=1,
         notify_chat_id=999,
         admin_ids=[42],
@@ -58,61 +55,14 @@ async def test_no_pending_auctions():
     )
 
 
-async def test_fetches_results_for_each_auction(monkeypatch):
+async def test_reports_pending_count_and_points_to_collector():
     message = _make_message()
-    bot = AsyncMock()
-    pool = FakePool([{"auction_id": "a1"}, {"auction_id": "a2"}, {"auction_id": "a3"}])
-    config = _make_config()
-
-    sync_results_mock = AsyncMock(side_effect=[True, False, True])
-    monkeypatch.setattr(commands_module, "sync_results", sync_results_mock)
-    sleep_mock = AsyncMock()
-    monkeypatch.setattr(commands_module.asyncio, "sleep", sleep_mock)
-
-    await cmd_backfill_results(message, bot, pool, config)
-
-    assert sync_results_mock.await_count == 3
-    sync_results_mock.assert_any_await(pool, "a1", "key")
-
-    final_text = message.answer.await_args_list[-1].args[0]
-    assert "Успешно достано: 2" in final_text
-    assert "1" in final_text
-
-
-async def test_delays_between_sequential_requests(monkeypatch):
-    message = _make_message()
-    bot = AsyncMock()
-    pool = FakePool([{"auction_id": "a1"}, {"auction_id": "a2"}, {"auction_id": "a3"}])
-    config = _make_config()
-
-    sync_results_mock = AsyncMock(return_value=True)
-    monkeypatch.setattr(commands_module, "sync_results", sync_results_mock)
-    sleep_mock = AsyncMock()
-    monkeypatch.setattr(commands_module.asyncio, "sleep", sleep_mock)
-
-    await cmd_backfill_results(message, bot, pool, config)
-
-    # No sleep before the first request, one sleep between each subsequent pair.
-    assert sleep_mock.await_count == 2
-    sleep_mock.assert_awaited_with(commands_module.BACKFILL_REQUEST_DELAY_SECONDS)
-
-
-async def test_stops_on_auth_expired(monkeypatch):
-    message = _make_message(user_id=111)
     bot = AsyncMock()
     pool = FakePool([{"auction_id": "a1"}, {"auction_id": "a2"}])
-    config = _make_config(admin_ids=[111, 222])
-
-    sync_results_mock = AsyncMock(side_effect=AuthExpiredError("rejected"))
-    monkeypatch.setattr(commands_module, "sync_results", sync_results_mock)
-    send_alert_mock = AsyncMock()
-    monkeypatch.setattr(commands_module, "send_admin_alert", send_alert_mock)
+    config = _make_config()
 
     await cmd_backfill_results(message, bot, pool, config)
 
-    sync_results_mock.assert_awaited_once()
-    send_alert_mock.assert_awaited_once()
-    alert_args = send_alert_mock.await_args.args
-    assert alert_args[0] is bot
-    assert alert_args[1] == [111, 222]
-    assert "SFL_API_KEY" in alert_args[2]
+    text = message.answer.await_args_list[-1].args[0]
+    assert "2" in text
+    assert "sfl-collector" in text

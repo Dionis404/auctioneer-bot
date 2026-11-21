@@ -6,10 +6,12 @@ Sunflower Land по данным, уже накопленным в базе: н�
 APScheduler для планирования уведомлений и asyncpg для доступа к
 PostgreSQL.
 
-Список аукционов и их результаты запрашиваются через официальный
-Community API (`GET /community/data?type=auctions` и
-`?type=auctionResults`, авторизация — `x-api-key`). Список обновляется
-раз в неделю фоновой задачей и вручную через `/update_auctions`.
+**В SFL API бот не ходит.** Список аукционов и их результаты собирает
+[sfl-collector](https://github.com/Dionis404/sfl-collector) в те же таблицы
+(`auctions`, `auction_results`, `item_total_supply` — схемы по-прежнему
+принадлежат этому репозиторию и применяются его миграциями). Бот раз в час
+перечитывает БД (`refresh_auctions_job`) и планирует уведомления; результаты
+подхватывает из `auction_results` по мере их появления.
 
 ## Стек
 
@@ -27,11 +29,10 @@ Community API (`GET /community/data?type=auctions` и
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота (от [@BotFather](https://t.me/BotFather)) |
 | `DATABASE_URL` | Строка подключения к PostgreSQL, например `postgresql://user:password@host:5432/auctioneer` |
-| `SFL_API_KEY` | Официальный API-ключ Sunflower Land (Settings → Developer Options → API Key в игре) для запроса списка аукционов и их результатов |
 | `ROUTERAI_API_KEY` | Ключ [RouterAI](https://routerai.ru) для генерации живой фразы-комментария в уведомлениях (модель `google/gemini-2.5-flash-lite`). Необязателен — без него уведомления шлются обычным шаблонным текстом |
 | `ALERT_CHAT_ID` | Чат для `/next_auction` |
 | `NOTIFY_CHAT_ID` | Чат, куда шлются уведомления об аукционах (напоминания, старт, результаты) |
-| `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/update_auctions`, `/next_auction`, `/backfill_results`, `/test_notification`, а также технические алерты об ошибках API в личку |
+| `ADMIN_IDS` | Telegram user id админов через запятую — им доступны `/status`, `/update_auctions`, `/next_auction`, `/backfill_results`, `/test_notification`, а также технические алерты в личку |
 | `SITE_IMAGE_BASE_URL` | База для картинок предметов, по умолчанию `https://goblincodex.fun/sprites/` |
 
 ## Локальный запуск
@@ -53,16 +54,16 @@ Community API (`GET /community/data?type=auctions` и
    ```
 
 При старте бот сам применяет миграции из `migrations/` и сразу запускает
-`refresh_auctions_job`, чтобы подтянуть текущие аукционы и восстановить
+`refresh_auctions_job`, чтобы перечитать аукционы из БД и восстановить
 расписание уведомлений.
 
 ## Команды бота
 
 - `/ping` — проверка живости.
 - `/status` — сводка по job'ам в шедулере (доступно админам).
-- `/update_auctions` — вручную обновить список аукционов и пересобрать расписание (админам).
+- `/update_auctions` — перечитать расписание аукционов из БД и пересобрать job'ы (админам). Список из SFL обновляет sfl-collector раз в сутки.
 - `/next_auction` — отправить в текущий чат информацию о ближайшем предстоящем аукционе (админам).
-- `/backfill_results` — вручную дозагрузить результаты завершённых аукционов, у которых их ещё нет (админам).
+- `/backfill_results` — показать, скольким завершённым аукционам не хватает результатов; их добирает sfl-collector автоматически (админам).
 - `/test_notification [reminder|started]` — отправить тестовое уведомление в `NOTIFY_CHAT_ID` для проверки формата (админам).
 
 ## Docker / Portainer

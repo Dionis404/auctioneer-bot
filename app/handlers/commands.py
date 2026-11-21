@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -14,12 +13,9 @@ from app.jobs.auctions import schedule_all_pending
 from app.jobs.notifications import (
     format_bid,
     format_msk_time,
-    send_admin_alert,
     send_with_image_preview,
 )
 from app.llm_flavor import generate_flavor_line
-from app.sfl_client import AuthExpiredError
-from app.sync import sync_auctions, sync_results
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +24,6 @@ router = Router(name="commands")
 JOB_PREFIXES = ("reminder_", "started_", "delete_")
 
 TEST_NOTIFICATION_TYPES = ("reminder", "started")
-
-# Community API rate limit is ~1 request/5s per IP; space out sequential
-# per-auction requests in /backfill_results to avoid immediately hitting it.
-BACKFILL_REQUEST_DELAY_SECONDS = 5
 
 
 def _is_admin(message: Message, config: Config) -> bool:
@@ -90,28 +82,16 @@ async def cmd_update_auctions(
     if not _is_admin(message, config):
         return
 
-    await message.answer("🔄 Обновляю список аукционов...")
-
-    try:
-        affected = await sync_auctions(db_pool, config.sfl_api_key)
-    except AuthExpiredError:
-        await message.answer(
-            "❌ Ключ SFL_API_KEY отклонён (401) — нужно проверить/обновить SFL_API_KEY."
-        )
-        await send_admin_alert(
-            bot,
-            config.admin_ids,
-            "❌ Ключ SFL_API_KEY отклонён (401) — нужно проверить/обновить SFL_API_KEY.",
-        )
-        return
+    await message.answer("🔄 Перечитываю расписание аукционов из БД...")
 
     await schedule_all_pending(bot, db_pool, scheduler, config)
 
     summary = get_scheduler_summary(scheduler)
     await message.answer(
-        "✅ Обновление завершено.\n"
-        f"Обработано аукционов: {affected}\n"
-        f"Всего job'ов в шедулере: {summary['total']}"
+        "✅ Расписание перечитано.\n"
+        f"Всего job'ов в шедулере: {summary['total']}\n\n"
+        "Список аукционов и их результаты обновляет sfl-collector "
+        "(список — раз в сутки, результаты — каждые ~3 минуты после завершения)."
     )
 
 
@@ -144,36 +124,10 @@ async def cmd_backfill_results(
         return
 
     await message.answer(
-        f"⚙️ Догружаю результаты для {len(rows)} завершённых аукционов..."
+        f"⏳ Не хватает результатов для {len(rows)} завершённых аукционов.\n"
+        "Их добирает sfl-collector (каждые ~3 минуты после завершения аукциона) — "
+        "ручная догрузка больше не нужна, результаты появятся сами."
     )
-
-    fetched = 0
-    not_ready = 0
-
-    for index, row in enumerate(rows):
-        if index > 0:
-            await asyncio.sleep(BACKFILL_REQUEST_DELAY_SECONDS)
-
-        try:
-            success = await sync_results(db_pool, row["auction_id"], config.sfl_api_key)
-        except AuthExpiredError:
-            await send_admin_alert(
-                bot,
-                config.admin_ids,
-                "❌ Ключ SFL_API_KEY отклонён (401) — нужно проверить/обновить SFL_API_KEY.",
-            )
-            return
-
-        if success:
-            fetched += 1
-        else:
-            not_ready += 1
-
-    lines = ["✅ Готово.", f"Успешно достано: {fetched}"]
-    if not_ready:
-        lines.append(f"Аукцион ещё не завершён/не готов (попробуйте позже): {not_ready}")
-
-    await message.answer("\n".join(lines))
 
 
 @router.message(Command("next_auction"))

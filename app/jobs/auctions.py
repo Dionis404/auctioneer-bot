@@ -8,35 +8,28 @@ from asyncpg import Pool
 from app.config import Config
 from app.jobs.notifications import (
     delete_notification,
-    send_admin_alert,
     send_reminder,
     send_results_notification,
     send_started,
 )
-from app.sfl_client import AuthExpiredError
-from app.sync import sync_auctions, sync_results
 
 logger = logging.getLogger(__name__)
 
-# Community API rate limit is ~1 request/5s per IP (doubling to 10s if hammered),
-# so retries stay just above that floor instead of the old conservative backoff.
-RESULTS_RETRY_DELAYS_SECONDS = [5, 10, 15, 30]
+# Результаты аукциона появляются в auction_results не мгновенно после end_at
+# (их добирает sfl-collector раз в ~2.5 мин, а сам SFL API отдаёт их с задержкой),
+# поэтому wait_and_send_results перепланирует себя по этим паузам.
+RESULTS_RETRY_DELAYS_SECONDS = [60, 180, 300, 900, 3600]
 
 
 async def refresh_auctions_job(
     bot: Bot, pool: Pool, scheduler: AsyncIOScheduler, config: Config
 ) -> None:
-    logger.info("Running refresh_auctions_job")
-    try:
-        await sync_auctions(pool, config.sfl_api_key)
-    except AuthExpiredError:
-        await send_admin_alert(
-            bot,
-            config.admin_ids,
-            "❌ Ключ SFL_API_KEY отклонён (401) — нужно проверить/обновить SFL_API_KEY.",
-        )
-        return
-
+    """
+    Перечитывает auctions из БД и перепланирует уведомления.
+    Сам список аукционов и результаты из SFL API собирает sfl-collector
+    (раз в сутки список, каждые ~2.5 мин результаты) — бот в API не ходит.
+    """
+    logger.info("Running refresh_auctions_job (DB re-read)")
     try:
         await schedule_all_pending(bot, pool, scheduler, config)
     except Exception:
@@ -53,15 +46,14 @@ async def schedule_all_pending(
     rows = await pool.fetch(
         "SELECT auction_id, start_at, end_at FROM auctions WHERE start_at > now()"
     )
-
     logger.info(f"schedule_all_pending: found {len(rows)} future auctions")
 
     scheduled_count = 0
 
     for row in rows:
         auction_id = row["auction_id"]
-        start_at: datetime = row["start_at"]
-        end_at: datetime = row["end_at"]
+        start_at = row["start_at"]
+        end_at = row["end_at"]
 
         if _add_job_if_future(
             scheduler,
@@ -109,7 +101,7 @@ async def schedule_all_pending(
                 job_id=f"results_{auction_id}",
                 run_date=end_at + timedelta(seconds=20),
                 now=now,
-                func=fetch_and_send_results,
+                func=wait_and_send_results,
                 args=(bot, pool, auction_id, scheduler, config),
                 kwargs={"attempt": 0},
             ):
@@ -143,7 +135,17 @@ def _add_job_if_future(
     return True
 
 
-async def fetch_and_send_results(
+async def _results_ready(pool: Pool, auction_id: str) -> bool:
+    """Результаты уже в БД (их положил sfl-collector)?"""
+    return (
+        await pool.fetchval(
+            "SELECT 1 FROM auction_results WHERE auction_id = $1", auction_id
+        )
+        is not None
+    )
+
+
+async def wait_and_send_results(
     bot: Bot,
     pool: Pool,
     auction_id: str,
@@ -151,17 +153,12 @@ async def fetch_and_send_results(
     config: Config,
     attempt: int = 0,
 ) -> None:
-    try:
-        success = await sync_results(pool, auction_id, config.sfl_api_key)
-    except AuthExpiredError:
-        await send_admin_alert(
-            bot,
-            config.admin_ids,
-            "❌ Ключ SFL_API_KEY отклонён (401) — нужно проверить/обновить SFL_API_KEY.",
-        )
-        return
-
-    if success:
+    """
+    Ждёт появления результатов аукциона в auction_results (их пишет
+    sfl-collector) и шлёт уведомление. Нет строки — перепланирует себя
+    по RESULTS_RETRY_DELAYS_SECONDS.
+    """
+    if await _results_ready(pool, auction_id):
         await send_results_notification(bot, pool, auction_id, config.routerai_api_key)
         return
 
@@ -174,7 +171,7 @@ async def fetch_and_send_results(
     delay = RESULTS_RETRY_DELAYS_SECONDS[attempt]
     run_date = datetime.now(timezone.utc) + timedelta(seconds=delay)
     scheduler.add_job(
-        fetch_and_send_results,
+        wait_and_send_results,
         trigger="date",
         run_date=run_date,
         id=f"results_{auction_id}_retry_{attempt + 1}",
