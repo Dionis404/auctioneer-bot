@@ -14,7 +14,10 @@ from app.config import load_config
 from app.db import create_pool, run_migrations
 from app.handlers import commands, fallback
 from app.image_compose import close_client as close_image_client
-from app.jobs.auctions import refresh_auctions_job
+from app.jobs.auctions import (
+    refresh_auctions_job,
+    resend_missing_results_notifications,
+)
 from app.llm_flavor import close_client as close_llm_client
 
 logging.basicConfig(
@@ -62,6 +65,18 @@ async def main() -> None:
         id="refresh_auctions_job",
         replace_existing=True,
         args=(bot, pool, scheduler, config),
+        next_run_time=datetime.now(timezone.utc),
+    )
+
+    # Страховка: досылка уведомлений о результатах, если штатная цепочка
+    # ретраев не дождалась их появления в БД (см. jobs/auctions.py).
+    scheduler.add_job(
+        resend_missing_results_notifications,
+        trigger="interval",
+        minutes=10,
+        id="resend_missing_results_notifications",
+        replace_existing=True,
+        args=(bot, pool, config),
         next_run_time=datetime.now(timezone.utc),
     )
 

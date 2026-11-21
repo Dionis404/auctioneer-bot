@@ -145,6 +145,42 @@ async def _results_ready(pool: Pool, auction_id: str) -> bool:
     )
 
 
+async def resend_missing_results_notifications(
+    bot: Bot, pool: Pool, config: Config
+) -> None:
+    """
+    Страховка на случай, если wait_and_send_results исчерпал ретраи
+    (например, sfl-collector был занят историческим бэклогом): досылает
+    уведомление для недавно завершившихся аукционов, у которых результаты
+    уже в БД, а уведомления 'results' ещё нет.
+
+    Окно «старше 2 часов» гарантирует, что штатная цепочка ретраев
+    (максимум ~1.6 ч) уже завершилась и дублей не будет.
+    """
+    rows = await pool.fetch(
+        """
+        SELECT r.auction_id
+        FROM auction_results r
+        JOIN auctions a ON a.auction_id = r.auction_id
+        WHERE a.end_at <= now() - interval '2 hours'
+          AND a.end_at > now() - interval '3 days'
+          AND NOT EXISTS (
+              SELECT 1 FROM auction_notifications n
+              WHERE n.auction_id = r.auction_id AND n.kind = 'results'
+          )
+        ORDER BY a.end_at
+        """
+    )
+    for row in rows:
+        logger.info(
+            "resend_missing_results_notifications: досылаю результаты %s",
+            row["auction_id"],
+        )
+        await send_results_notification(
+            bot, pool, row["auction_id"], config.routerai_api_key
+        )
+
+
 async def wait_and_send_results(
     bot: Bot,
     pool: Pool,
