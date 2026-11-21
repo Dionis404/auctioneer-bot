@@ -1,6 +1,10 @@
 services:
   auctioneer-bot:
-    build: .
+    # Образ собирается в GitHub Actions по тегам v* (см. .github/workflows).
+    # Раньше была build: . — но тогда Deploy в Komodo не пересобирал код,
+    # и контейнер жил на старой версии.
+    image: ghcr.io/dionis404/auctioneer-bot:latest
+    pull_policy: always
     container_name: auctioneer-bot
     restart: unless-stopped
     mem_limit: 512m
